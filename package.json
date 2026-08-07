@@ -1,22 +1,140 @@
 {
   "name": "solar-erp",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.81",
+  "description": "SolarERP — admin / usta panel",
+  "author": "",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
+    "dev:vite": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:supply": "node scripts/test-supply-calculation.mjs",
+    "sync:supply-csv": "node scripts/sync-supply-csv-from-db.mjs",
+    "seed:supply": "node scripts/seed-supply-db.mjs",
+    "backend": "node server.js",
+    "start": "node server.js",
+    "serve:prod": "cross-env NODE_ENV=production SERVE_STATIC=true node server.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "mobile:sync": "vite build && npx cap sync android",
+    "apk": "node scripts/build-apk.mjs",
+    "deploy:vps": "node scripts/deploy-vps.mjs",
+    "deploy:supply": "node scripts/deploy-supply-vps.mjs",
+    "deploy:firebase-rules": "node scripts/deploy-firestore-rules.mjs",
+    "migrate:sql": "node scripts/migrate-to-sql.mjs",
+    "migrate:telegram-messages": "node scripts/migrate-telegram-messages.mjs",
+    "report:telegram": "node scripts/june-telegram-report.mjs",
+    "import:telegram-export": "node scripts/import-telegram-export.mjs",
+    "restore:telegram": "node scripts/restore-telegram-report.mjs --from=2026-06-01 --to=2026-06-30",
+    "backfill:keldi-ketdi": "node scripts/backfill-keldi-ketdi.mjs",
+    "rebackfill:keldi-ketdi": "node scripts/rebackfill-keldi-ketdi.mjs",
+    "android": "node scripts/build-apk.mjs",
+    "android:open": "npx cap open android",
+    "desktop:kill": "node scripts/desktop-kill.mjs",
+    "desktop": "node scripts/desktop-dev.mjs",
+    "desktop:prod": "npm run build && npm run desktop:kill && cross-env ELECTRON_SKIP_EMBEDDED_SERVER=1 PORT=5150 concurrently --success command-1 -k \"cross-env NODE_ENV=production SERVE_STATIC=true PORT=5150 node server.js\" \"wait-on http-get://127.0.0.1:5150/status --timeout 120000 && electron .\"",
+    "desktop:exe": "npm run build && npm run desktop:kill && node scripts/prepare-desktop-build.mjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
+    "sync:clients": "node scripts/sync-clients.mjs",
+    "sync:clients:deploy": "node scripts/sync-clients.mjs --deploy"
   },
   "dependencies": {
+    "@capacitor/camera": "^6.1.3",
+    "@capacitor/filesystem": "^6.0.4",
+    "@capacitor/geolocation": "^6.1.1",
+    "@capacitor/share": "^6.0.4",
+    "axios": "^1.7.9",
+    "better-sqlite3": "^12.11.1",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "firebase": "^12.12.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
+    "multer": "^2.1.1",
+    "node-cron": "^3.0.3",
+    "pg": "^8.22.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.3",
+    "recharts": "^3.9.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "postcss": "^8.4.47",
+    "ssh2": "^1.17.0",
     "tailwindcss": "^3.4.14",
-    "vite": "^5.4.9"
+    "vite": "^5.4.9",
+    "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "uz.sunnur.solarerp.desktop",
+    "productName": "SolarERP",
+    "copyright": "",
+    "asar": false,
+    "directories": {
+      "output": "desktop-dist"
+    },
+    "files": [
+      "package.json",
+      "dist/**/*",
+      "electron/**/*",
+      "server.js",
+      "bot.js",
+      "telegramService.js",
+      "erpService.js",
+      "storage.js",
+      "server/**/*",
+      "shared/**/*",
+      "src/photos/**/*",
+      "src/activity/**/*.js",
+      "src/lib/**/*",
+      "backend/**/*",
+      "node_modules/**/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "data",
+        "to": "resources/app/data",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "desktop-build.env",
+        "to": "resources/app/.env"
+      }
+    ],
+    "forceCodeSigning": false,
+    "win": {
+      "sign": null,
+      "signDlls": false,
+      "signAndEditExecutable": false,
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "SolarERP",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "SolarERP-portable.exe"
+    }
   }
 }

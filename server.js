@@ -20,6 +20,9 @@ import { startTelegramInboundPoller, stopTelegramInboundPoller } from "./server/
 import { saveWorkLogPhotoToDb } from "./server/workLogPhotoStore.js";
 import { createDbRouter, handleSqlLogin } from "./server/routes/dbApi.js";
 import { createReportsRouter } from "./server/routes/reportsApi.js";
+import { createSupplyRouter } from "./server/routes/supplyApi.js";
+import { isSupplyDbAvailable, loadInternalCatalog } from "./server/supply/catalogStore.js";
+import { resolveSupplyDir } from "./server/supply/supplyDir.js";
 import {
   buildDailyAttendanceReportForDate,
   generateAndSendDailyAttendanceReport,
@@ -51,12 +54,40 @@ const config = {
 };
 
 app.disable("x-powered-by");
+const CORS_ALLOW = new Set([
+  "capacitor://localhost",
+  "ionic://localhost",
+  "http://localhost",
+  "https://localhost",
+  "http://127.0.0.1",
+  "https://127.0.0.1",
+]);
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return false;
+  if (CORS_ALLOW.has(origin)) return true;
+  if (/^capacitor:\/\//i.test(origin)) return true;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return true;
+  if (/^https?:\/\/77\.237\.237\.94(:\d+)?$/i.test(origin)) return true;
+  const extra = String(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return extra.includes(origin);
+}
 app.use((req, res, next) => {
-  // Capacitor Android app uses a non-http origin (e.g. capacitor://localhost),
-  // so we allow all origins for API calls.
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = String(req.headers.origin || "");
+  if (origin && isAllowedCorsOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  } else if (!origin) {
+    // Capacitor / curl — Origin bo‘lmasligi mumkin
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Solar-Role, X-Solar-Login, X-Solar-Password, X-Supply-Admin-Token",
+  );
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
   }
@@ -74,7 +105,46 @@ void initDb().catch((err) => {
 
 app.use("/api/db", createDbRouter());
 app.use("/api/reports", createReportsRouter());
+app.use("/api/supply", createSupplyRouter());
+console.log("[supply] router registered: /api/supply");
 app.use("/api/media", express.static(UPLOADS_DIR));
+
+{
+  const supplyPath = resolveSupplyDir();
+  const exists = fs.existsSync(supplyPath);
+  console.log("[supply] data path:", supplyPath);
+  console.log("[supply] data path exists:", exists);
+  if (exists) {
+    try {
+      const names = fs.readdirSync(supplyPath).filter((n) =>
+        /\.(csv|txt|db|sqlite)$/i.test(n),
+      );
+      console.log("[supply] files:");
+      for (const n of names) console.log("[supply] -", n);
+    } catch (err) {
+      console.warn("[supply] readdir fail:", err?.message || err);
+    }
+  }
+  if (isSupplyDbAvailable()) {
+    try {
+      const cat = loadInternalCatalog({ force: true });
+      if (cat.ok) {
+        console.log("[supply] catalog loaded");
+        console.log("[supply] panels:", cat.panels?.length || 0);
+        console.log("[supply] inverters:", cat.inverters?.length || 0);
+        console.log("[supply] batteries:", cat.batteries?.length || 0);
+        console.log("[supply] accessories:", cat.accessories?.length || 0);
+        console.log("[supply] sources:", (cat.sources || []).join(", ") || "—");
+      } else {
+        console.warn("[supply] catalog empty:", cat.error);
+      }
+    } catch (err) {
+      console.error("[supply] catalog load xatosi:", err?.message || err);
+    }
+  } else {
+    console.warn("[supply-db] supply.db topilmadi / data/supply bo‘sh:", supplyPath);
+  }
+}
 
 const TELEGRAM_EXPORT_DIR = path.join(__dirname, "data", "telegram-export", "ChatExport_2026-07-03");
 if (fs.existsSync(TELEGRAM_EXPORT_DIR)) {
@@ -1363,7 +1433,9 @@ let server = null;
 export function startServer({ port = PORT, host = "0.0.0.0" } = {}) {
   if (server) return server;
   server = app.listen(Number(port) || PORT, host, () => {
-    console.log(`Server running on port ${Number(port) || PORT}`);
+    const p = Number(port) || PORT;
+    console.log(`[server] PORT=${p}`);
+    console.log(`Server running on port ${p}`);
     startBot({
       ...config,
       getMonthlyDataset: async () => {
@@ -1385,7 +1457,14 @@ export function startServer({ port = PORT, host = "0.0.0.0" } = {}) {
         };
       },
     });
-    startTelegramInboundPoller({ token: config.token });
+    const inboundEnabled =
+      String(process.env.TELEGRAM_INBOUND_POLL || "")
+        .toLowerCase() === "true";
+    if (inboundEnabled) {
+      startTelegramInboundPoller({ token: config.token });
+    } else {
+      console.log("[telegram-inbound] polling o‘chiq (TELEGRAM_INBOUND_POLL!=true)");
+    }
   });
   return server;
 }

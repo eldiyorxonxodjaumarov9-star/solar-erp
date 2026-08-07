@@ -53,6 +53,7 @@ const UPLOAD_DIRS = [
   "dist",
   "server",
   "shared",
+  "data/supply",
   "src/photos",
   "src/activity",
   "src/lib",
@@ -104,11 +105,11 @@ function exec(conn, cmd) {
   });
 }
 
-async function verifyGeo() {
-  const url = `http://${VPS_HOST}/api/geo/approx`;
+async function verifySupply() {
+  const url = `http://${VPS_HOST}/api/supply/health`;
   const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
   const text = await res.text();
-  return { status: res.status, text: text.slice(0, 300) };
+  return { status: res.status, text: text.slice(0, 500) };
 }
 
 async function main() {
@@ -212,15 +213,15 @@ Yoki bir martalik (parolni o‘zingiz qo‘ying):
     );
     console.log(pm2Out);
 
-    console.log("Tekshiruv: /api/geo/approx …");
+    console.log("Tekshiruv: /api/supply/health …");
     await new Promise((r) => setTimeout(r, 2500));
-    const check = await verifyGeo();
+    const check = await verifySupply();
     console.log(`${check.status}: ${check.text}`);
     if (check.status !== 200) {
-      console.error("⚠️ Geo endpoint hali ishlamayapti — VPS_PATH yoki pm2 nomini tekshiring.");
+      console.error("⚠️ Supply endpoint ishlamayapti — VPS_PATH yoki pm2 nomini tekshiring.");
       process.exit(1);
     }
-    console.log("✅ VPS yangilandi — joylashuv endpoint ishlayapti.");
+    console.log("✅ VPS yangilandi — Supply API ishlayapti.");
   } finally {
     conn.end();
   }

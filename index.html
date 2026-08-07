@@ -1,12 +1,57 @@
 <!doctype html>
 <html lang="uz">
   <head>
+    <script>
+      (function () {
+        try {
+          var k = "appTheme";
+          var allowed = ["yashil", "yorug", "qorongi"];
+          var v = localStorage.getItem(k);
+          if (!allowed.includes(v)) v = "yashil";
+          document.documentElement.setAttribute("data-app-theme", v);
+        } catch (e) {
+          document.documentElement.setAttribute("data-app-theme", "yashil");
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <!-- Non-blocking: Google Fonts ochilmasa ham UI oq ekranda qolib ketmasin -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      />
+    </noscript>
     <title>Solar ERP</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        style="
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: system-ui, sans-serif;
+          color: #64748b;
+          background: #f1f5f9;
+        "
+      >
+        Solar ERP yuklanmoqda…
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

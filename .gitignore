@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+
+# Secrets — hech qachon commit qilinmasin
+.env
+.env.*
+!.env.example
+!.env.deploy.example
+*.pem
+*.key
+*service-account*.json
+**/serviceAccount*.json
+**/firebase-adminsdk*.json
+desktop-build.env
+
+# Local / build artifacts
+dist/
+dist-apk/
+desktop-dist/
+desktop-dist-new/
+SolarERP-last.apk
+*.apk
+*.aab
+*.log
+.DS_Store
+Thumbs.db
+
+# Vite / tooling
+vite.config.js.timestamp-*.mjs
+
+# Android build outputs (source android/ tracked)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.apk-version-code
+android/captures/
+android/*.iml
+android/.idea/
+
+# Electron / Capacitor local
+.idea/
+.vscode/
+*.swp
+
+# Runtime DB / uploads (supply catalog files are tracked separately)
+data/solar-erp.db
+data/solar-erp.db-*
+data/uploads/
+data/master-daily-uploads.json
+data/supply/history.json
+data/supply/*.db-journal
+data/supply/*.db-wal
+data/supply/*.db-shm
+
+# VPS one-off patch folders / zips (not source of truth)
+vps-*/
+vps-*.zip
+vps-dep-audit.json
+scripts/vps-dep-audit.json
+scripts/recovered-attendance.json
+
+# Telegram export / local dumps
+telegram-auto-sender/.env
+telegram-auto-sender/node_modules/
+
+# Coverage / test
+coverage/
+.nyc_output/
+
+data/telegram-export/
+data/telegram-*.json
+

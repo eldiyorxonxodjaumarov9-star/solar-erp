@@ -1,0 +1,33 @@
+{
+  "companyName": "Sunnur Energy",
+  "reportTitle": "Tijoriy taklif",
+  "panel_warranty_years": 25,
+  "inverter_warranty": {
+    "hybrid": 2,
+    "ongrid": 5,
+    "offgrid": 2,
+    "chastotnik": 2
+  },
+  "battery_warranty": {
+    "AGM": 1,
+    "GEL": 1,
+    "LiFePO4": "5–8"
+  },
+  "rules": {
+    "panel_count_mode": "ceil",
+    "metal_meter_per_panel": 8,
+    "mc4_per_panel": 1,
+    "orta_shayba_per_panel": 1,
+    "chekka_shayba_fixed": 15,
+    "cable_meter_per_kw": 8,
+    "panels_per_pv_string": 10,
+    "surge_qty": 2,
+    "ac_breaker_qty": 1
+  },
+  "notes": [
+    "To'lov oldindan amalga oshiriladi.",
+    "Narx 3 kun amal qiladi.",
+    "Montaj narx ichiga kirmaydi.",
+    "Yetkazib berish mavjud."
+  ]
+}

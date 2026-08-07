@@ -1,0 +1,261 @@
+/* Global mavzu: html[data-app-theme="yashil"|"yorug"|"qorongi"] */
+
+html[data-app-theme="yashil"],
+html[data-app-theme="yorug"] {
+  color-scheme: light;
+}
+
+html[data-app-theme="qorongi"] {
+  color-scheme: dark;
+}
+
+/* Tanlangan mavzu bo‘yicha body fonlari */
+html[data-app-theme="yashil"] body {
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 45%),
+    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.1), transparent 40%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+html[data-app-theme="yorug"] body {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%);
+}
+
+html[data-app-theme="qorongi"] body {
+  background: linear-gradient(180deg, #020617 0%, #0f172a 55%, #020617 100%);
+  color: rgb(226 232 240);
+}
+
+/* ========== Qorong‘i: umumiy kartochka / matn / chegaralar ========== */
+
+html[data-app-theme="qorongi"] .text-slate-900 {
+  color: rgb(248 250 252) !important;
+}
+
+html[data-app-theme="qorongi"] .text-slate-800 {
+  color: rgb(241 245 249) !important;
+}
+
+html[data-app-theme="qorongi"] .text-slate-700 {
+  color: rgb(226 232 240) !important;
+}
+
+html[data-app-theme="qorongi"] .text-slate-600 {
+  color: rgb(203 213 225) !important;
+}
+
+html[data-app-theme="qorongi"] .text-slate-500 {
+  color: rgb(148 163 184) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-white {
+  background-color: rgb(30 41 59 / 0.96) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-white\/85 {
+  background-color: rgb(30 41 59 / 0.88) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-white\/90 {
+  background-color: rgb(30 41 59 / 0.92) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-white\/92 {
+  background-color: rgb(30 41 59 / 0.93) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-white\/96 {
+  background-color: rgb(30 41 59 / 0.96) !important;
+}
+
+html[data-app-theme="qorongi"]
+  .supports-\[backdrop-filter\]\:bg-white\/75 {
+  background-color: rgb(30 41 59 / 0.78) !important;
+}
+
+html[data-app-theme="qorongi"]
+  .supports-\[backdrop-filter\]\:bg-white\/80 {
+  background-color: rgb(30 41 59 / 0.82) !important;
+}
+
+html[data-app-theme="qorongi"]
+  .supports-\[backdrop-filter\]\:bg-white\/85 {
+  background-color: rgb(30 41 59 / 0.85) !important;
+}
+
+html[data-app-theme="qorongi"]
+  .supports-\[backdrop-filter\]\:bg-white\/92 {
+  background-color: rgb(30 41 59 / 0.92) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-slate-50\/80 {
+  background-color: rgb(15 23 42 / 0.85) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-slate-50\/90 {
+  background-color: rgb(15 23 42 / 0.92) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-slate-50\/60 {
+  background-color: rgb(15 23 42 / 0.72) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-slate-50 {
+  background-color: rgb(15 23 42) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-slate-100\/90 {
+  background-color: rgb(30 41 59 / 0.9) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-slate-100 {
+  background-color: rgb(51 65 85 / 0.5) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-slate-100\/80 {
+  background-color: rgb(51 65 85 / 0.45) !important;
+}
+
+html[data-app-theme="qorongi"] .hover\:bg-slate-50:hover {
+  background-color: rgb(51 65 85 / 0.35) !important;
+}
+
+html[data-app-theme="qorongi"] .hover\:bg-slate-100:hover {
+  background-color: rgb(51 65 85 / 0.45) !important;
+}
+
+html[data-app-theme="qorongi"] .border-slate-200\/85,
+html[data-app-theme="qorongi"] .border-slate-200\/90,
+html[data-app-theme="qorongi"] .border-slate-200\/80,
+html[data-app-theme="qorongi"] .border-slate-200\/70,
+html[data-app-theme="qorongi"] .border-slate-200\/75 {
+  border-color: rgb(51 65 85 / 0.85) !important;
+}
+
+html[data-app-theme="qorongi"] .border-slate-100,
+html[data-app-theme="qorongi"] .border-slate-100\/90 {
+  border-color: rgb(51 65 85 / 0.65) !important;
+}
+
+html[data-app-theme="qorongi"] .border-dashed.border-slate-200\/90 {
+  border-color: rgb(71 85 105 / 0.65) !important;
+}
+
+html[data-app-theme="qorongi"] .ring-slate-900\/\[0\.03\] {
+  --tw-ring-color: rgb(148 163 184 / 0.08) !important;
+}
+
+html[data-app-theme="qorongi"] .shadow-soft-md,
+html[data-app-theme="qorongi"] .shadow-soft-lg,
+html[data-app-theme="qorongi"] .shadow-soft-xl {
+  box-shadow:
+    0 8px 24px rgb(0 0 0 / 0.35),
+    0 2px 6px rgb(0 0 0 / 0.22) !important;
+}
+
+html[data-app-theme="qorongi"] .shadow-inner {
+  box-shadow: inset 0 2px 8px rgb(0 0 0 / 0.25) !important;
+}
+
+html[data-app-theme="qorongi"] .shadow-sm {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35) !important;
+}
+
+html[data-app-theme="qorongi"] .shadow-md {
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.35) !important;
+}
+
+/* Gradient kartochkalar (section asosiy qobiqqa yaqin) */
+html[data-app-theme="qorongi"] .bg-gradient-to-br.from-white.via-white.to-slate-50\/80 {
+  background-image: linear-gradient(
+    to bottom right,
+    rgb(30 41 59),
+    rgb(23 37 56),
+    rgb(15 23 42 / 0.92)
+  ) !important;
+}
+
+html[data-app-theme="qorongi"] .from-slate-50\/80 {
+  --tw-gradient-from: rgb(30 41 59 / 0.92) var(--tw-gradient-from-position) !important;
+}
+
+html[data-app-theme="qorongi"] .via-white {
+  --tw-gradient-via: rgb(30 41 59) var(--tw-gradient-via-position) !important;
+}
+
+html[data-app-theme="qorongi"] .to-slate-50\/80 {
+  --tw-gradient-to: rgb(15 23 42 / 0.92) var(--tw-gradient-to-position) !important;
+}
+
+html[data-app-theme="qorongi"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(51 65 85 / 0.55) !important;
+}
+
+html[data-app-theme="qorongi"] .placeholder\:text-slate-400::placeholder {
+  color: rgb(148 163 184) !important;
+}
+
+html[data-app-theme="qorongi"] input,
+html[data-app-theme="qorongi"] select,
+html[data-app-theme="qorongi"] textarea {
+  color: rgb(248 250 252);
+}
+
+html[data-app-theme="qorongi"] .text-red-600 {
+  color: rgb(252 165 165) !important;
+}
+
+html[data-app-theme="qorongi"] .border-amber-200\/90 {
+  border-color: rgb(180 83 9 / 0.45) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-amber-50\/90 {
+  background-color: rgb(120 53 15 / 0.35) !important;
+}
+
+html[data-app-theme="qorongi"] .text-amber-900 {
+  color: rgb(254 243 199) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-red-50 {
+  background-color: rgb(127 29 29 / 0.35) !important;
+}
+
+html[data-app-theme="qorongi"] .border-red-200 {
+  border-color: rgb(185 28 28 / 0.45) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-emerald-50 {
+  background-color: rgb(6 78 59 / 0.35) !important;
+}
+
+html[data-app-theme="qorongi"] .border-emerald-200\/90 {
+  border-color: rgb(5 150 105 / 0.35) !important;
+}
+
+html[data-app-theme="qorongi"] .border.border-slate-200\/90.bg-white {
+  background-color: rgb(30 41 59 / 0.96) !important;
+}
+
+/* Mini-gorizontal scroll jadvallar */
+html[data-app-theme="qorongi"] thead.bg-slate-50\/90 {
+  background-color: rgb(30 41 59 / 0.95) !important;
+}
+
+html[data-app-theme="qorongi"] tbody.border-slate-100 {
+  border-color: rgb(51 65 85 / 0.45) !important;
+}
+
+html[data-app-theme="qorongi"] tr.border-slate-100 {
+  border-color: rgb(51 65 85 / 0.45) !important;
+}
+
+html[data-app-theme="qorongi"] .bg-slate-900\/35 {
+  background-color: rgb(0 0 0 / 0.55) !important;
+}
+
+html[data-app-theme="qorongi"] .backdrop-blur-\[2px\] {
+  backdrop-filter: blur(2px);
+}
+
+/* Yorug‘: faqat neutral fon — kartochkalar va komponentlar odatdagidek */

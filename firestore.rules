@@ -130,6 +130,11 @@ service cloud.firestore {
       allow create, update, delete: if isSignedIn();
     }
 
+    match /supplyCalculations/{docId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn();
+    }
+
     // Yangi kolleksiyalar (qoida qo‘shilmasa ham anonim auth bilan ishlashi uchun)
     match /{document=**} {
       allow read, write: if isSignedIn();

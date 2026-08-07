@@ -1,0 +1,24 @@
+id,name,brand,model,power_kw,type,voltage,phase,price,category,warranty_years
+1,Chastotnik Upower M900-0220G3 22 kW,Upower,M900-0220G3 22 kW,22,chastotnik,380V,3,525,inverter,2
+2,Deye on-grid 20 kW (380V),Deye,on-grid 20 kW (380V),20,ongrid,380V,3,966,inverter,5
+3,Deye on-grid 30 kW (380V),Deye,on-grid 30 kW (380V),30,ongrid,380V,3,1280,inverter,5
+4,DEYE on-grid 20 kW 3p,DEYE,on-grid 20 kW 3p,20,ongrid,380V,3,966,inverter,5
+5,DEYE on-grid 30 kW 3p,DEYE,on-grid 30 kW 3p,30,ongrid,380V,3,1280,inverter,5
+6,INVT on-grid 20 kW (380V),INVT,on-grid 20 kW (380V),20,ongrid,380V,3,890,inverter,5
+7,INVT on-grid 25 kW (380V),INVT,on-grid 25 kW (380V),25,ongrid,380V,3,1050,inverter,5
+8,INVT on-grid 30 kW (380V),INVT,on-grid 30 kW (380V),30,ongrid,380V,3,1180,inverter,5
+9,Restar on-grid 20 kW (380V),Restar,on-grid 20 kW (380V),20,ongrid,380V,3,820,inverter,5
+10,Restar on-grid 25 kW (380V),Restar,on-grid 25 kW (380V),25,ongrid,380V,3,980,inverter,5
+11,Restar on-grid 30 kW (380V),Restar,on-grid 30 kW (380V),30,ongrid,380V,3,1120,inverter,5
+12,Think Power on-grid 25 kW (380V),Think Power,on-grid 25 kW (380V),25,ongrid,380V,3,990,inverter,5
+13,Deye hybrid 8 kW,Deye,hybrid 8 kW,8,hybrid,220V,1,980,inverter,2
+14,Deye hybrid 12 kW,Deye,hybrid 12 kW,12,hybrid,380V,3,1350,inverter,2
+15,Deye hybrid 20 kW,Deye,hybrid 20 kW,20,hybrid,380V,3,1890,inverter,2
+16,Deye hybrid 30 kW,Deye,hybrid 30 kW,30,hybrid,380V,3,2480,inverter,2
+17,Felicity hybrid 10 kW,Felicity,hybrid 10 kW,10,hybrid,220V,1,1100,inverter,2
+18,Must off-grid 5 kW,Must,off-grid 5 kW,5,offgrid,220V,1,420,inverter,2
+19,Must off-grid 10 kW,Must,off-grid 10 kW,10,offgrid,220V,1,680,inverter,2
+20,Must off-grid 20 kW,Must,off-grid 20 kW,20,offgrid,380V,3,1250,inverter,2
+21,INVT chastotnik 15 kW,INVT,chastotnik 15 kW,15,chastotnik,380V,3,760,inverter,2
+22,INVT chastotnik 22 kW,INVT,chastotnik 22 kW,22,chastotnik,380V,3,920,inverter,2
+23,INVT chastotnik 30 kW,INVT,chastotnik 30 kW,30,chastotnik,380V,3,1180,inverter,2

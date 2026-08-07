@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SolarERP</string>
+    <string name="title_activity_main">SolarERP</string>
+    <string name="package_name">uz.sunnur.solarerp</string>
+    <string name="custom_url_scheme">uz.sunnur.solarerp</string>
+</resources>

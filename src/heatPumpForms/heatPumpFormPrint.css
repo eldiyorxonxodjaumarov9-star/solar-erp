@@ -1,0 +1,222 @@
+/* Skanerlangan blanka — faqat qog'oz ko'rinishi */
+.heat-pump-paper {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 14mm 16mm 18mm;
+  background: #fff;
+  color: #000;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 13pt;
+  line-height: 1.35;
+}
+
+.heat-pump-paper * {
+  box-sizing: border-box;
+}
+
+.heat-pump-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 15pt;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0 0 10mm;
+  line-height: 1.3;
+}
+
+.heat-pump-section {
+  margin-bottom: 7mm;
+  text-align: center;
+}
+
+.heat-pump-section-title {
+  font-weight: 700;
+  margin-bottom: 3mm;
+}
+
+.heat-pump-options {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2mm;
+}
+
+.heat-pump-options--grid {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: center;
+  column-gap: 12mm;
+  row-gap: 2mm;
+}
+
+.heat-pump-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 2.5mm;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.heat-pump-power-grid {
+  column-gap: 8mm;
+}
+
+.heat-pump-power-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3mm;
+  width: 100%;
+  max-width: 72mm;
+}
+
+.heat-pump-power-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.heat-pump-power-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5mm;
+  flex-shrink: 0;
+}
+
+.heat-pump-qty-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 6mm;
+  height: 6mm;
+  border: 0.35mm solid #000;
+  background: #fff;
+  font: inherit;
+  font-size: 12pt;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  color: #000;
+}
+
+.heat-pump-qty-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.heat-pump-qty-value {
+  min-width: 5mm;
+  text-align: center;
+  font-weight: 700;
+}
+
+.heat-pump-box {
+  display: inline-flex;
+  width: 4.5mm;
+  height: 4.5mm;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0.35mm solid #000;
+  font-size: 8pt;
+  line-height: 1;
+}
+
+.heat-pump-underline {
+  border: none;
+  border-bottom: 0.35mm solid #000;
+  background: transparent;
+  outline: none;
+  text-align: center;
+  font: inherit;
+  color: #000;
+  padding: 0 1mm 0.5mm;
+  min-width: 0;
+}
+
+.heat-pump-inline {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2mm;
+  flex-wrap: wrap;
+}
+
+.heat-pump-footer {
+  margin-top: 10mm;
+  text-align: center;
+}
+
+.heat-pump-footer-row {
+  margin-bottom: 5mm;
+}
+
+.heat-pump-footer-label {
+  font-weight: 700;
+  margin-bottom: 2mm;
+}
+
+.heat-pump-date-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2mm;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .heat-pump-no-print {
+    display: none !important;
+  }
+
+  .heat-pump-screen-wrap {
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .heat-pump-paper {
+    box-shadow: none !important;
+    max-width: none !important;
+    width: 210mm !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 14mm 16mm !important;
+  }
+}
+
+@media screen {
+  .heat-pump-screen-wrap {
+    background: #e8e8e8;
+    padding: 12px 8px 24px;
+  }
+
+  .heat-pump-paper {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  }
+}
+
+@media (max-width: 480px) {
+  .heat-pump-paper {
+    font-size: 11pt;
+    padding: 10mm 8mm 14mm;
+  }
+
+  .heat-pump-options--grid {
+    grid-template-columns: 1fr;
+  }
+}

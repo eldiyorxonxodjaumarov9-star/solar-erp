@@ -1,109 +1,201 @@
-const stats = [
-  {
-    title: "Loyihalar",
-    value: "24",
-    note: "4 ta loyiha bu oy boshlandi",
-    trend: "+12%",
-  },
-  {
-    title: "Ishchilar",
-    value: "158",
-    note: "Yangi 9 ta mutaxassis qo'shildi",
-    trend: "+6%",
-  },
-  {
-    title: "Daromad",
-    value: "2.8 mlrd so'm",
-    note: "O'tgan oyga nisbatan o'sish",
-    trend: "+18%",
-  },
-];
+import { Navigate, Route, Routes } from "react-router-dom";
+import { lazy, Suspense } from "react";
 
-const mobileNavItems = ["Loyihalar", "Xarajatlar", "Ish vaqti", "Chiqish"];
+import CatchAllRedirect from "./components/CatchAllRedirect";
 
-function App() {
+import RequireAuth from "./components/RequireAuth";
+
+import AppLayout from "./layouts/AppLayout";
+
+import UstaLayout from "./layouts/UstaLayout";
+
+import Dashboard from "./pages/Dashboard";
+
+import LoginPage from "./pages/LoginPage";
+
+import LoyihalarPage from "./pages/LoyihalarPage";
+
+import SectionPage from "./pages/SectionPage";
+
+import UstaPanelPage from "./pages/UstaPanelPage";
+
+import UstaLoyihalarPage from "./pages/UstaLoyihalarPage";
+
+import UstaXarajatlarPage from "./pages/UstaXarajatlarPage";
+
+import UstaIshVaqtlariPage from "./pages/UstaIshVaqtlariPage";
+
+import UstaRasmlarPage from "./pages/UstaRasmlarPage";
+
+import XarajatlarPage from "./pages/XarajatlarPage";
+
+import RasmlarPage from "./pages/RasmlarPage";
+
+import TahlilPage from "./pages/TahlilPage";
+
+import ViloyatIshKunlariPage from "./pages/ViloyatIshKunlariPage";
+
+import IshVaqtalariPage from "./pages/IshVaqtalariPage";
+
+import SozlamalarPage from "./pages/SozlamalarPage";
+
+import UstalarPage from "./pages/UstalarPage";
+import BrigadalarPage from "./pages/BrigadalarPage";
+import UstaFaollikPage from "./pages/UstaFaollikPage";
+import YorijnomaAdminPage from "./pages/YorijnomaAdminPage";
+import HisobotAdminPage from "./pages/HisobotAdminPage";
+import CommercialOffersPage from "./pages/CommercialOffersPage";
+import ContactsPage from "./pages/ContactsPage";
+import TaminotPage from "./pages/TaminotPage";
+import JalbaAdminPage from "./pages/JalbaAdminPage";
+import UstaJalbaPage from "./pages/UstaJalbaPage";
+import AsistenlarPage from "./pages/AsistenlarPage";
+import AsistenLayout from "./layouts/AsistenLayout";
+import AsistenPanelPage from "./pages/AsistenPanelPage";
+import AsistenIshVaqtiPage from "./pages/AsistenIshVaqtiPage";
+
+import { SECTION_COPY } from "./navConfig";
+
+const MonthlyReportsPage = lazy(() => import("./pages/MonthlyReportsPage"));
+
+function PageFallback() {
   return (
-    <div className="min-h-screen text-slate-900">
-      <header className="border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-cyan-500 text-sm font-bold text-white shadow-soft">
-              SE
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight sm:text-xl">
-                Solar ERP
-              </h1>
-              <p className="text-xs text-slate-500">Quyosh energiyasi boshqaruvi</p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2"
-          >
-            Admin Panel
-          </button>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-4 py-8 pb-32 sm:px-6 sm:pb-8 lg:px-8">
-        <section className="rounded-3xl bg-gradient-to-r from-brand-700 via-brand-600 to-cyan-500 p-6 text-white shadow-soft sm:p-8">
-          <p className="text-sm text-white/80">Boshqaruv paneli</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Xush kelibsiz, Solar ERP tizimi
-          </h2>
-          <p className="mt-3 max-w-2xl text-sm text-white/90 sm:text-base">
-            Loyihalar, xodimlar va moliyaviy ko'rsatkichlarni bir joyda zamonaviy
-            boshqaruv paneli orqali kuzating.
-          </p>
-        </section>
-
-        <section className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {stats.map((card) => (
-            <article
-              key={card.title}
-              className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-xl"
-            >
-              <div className="flex items-start justify-between">
-                <p className="text-sm font-medium text-slate-500">{card.title}</p>
-                <span className="rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-600">
-                  {card.trend}
-                </span>
-              </div>
-              <p className="mt-4 text-3xl font-bold tracking-tight text-slate-900">
-                {card.value}
-              </p>
-              <p className="mt-2 text-sm text-slate-500">{card.note}</p>
-            </article>
-          ))}
-        </section>
-      </main>
-
-      <nav
-        className="fixed inset-x-4 bottom-0 z-40 rounded-2xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-xl sm:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)" }}
-        aria-label="Pastki navigatsiya"
-      >
-        <ul className="grid grid-cols-4 gap-1">
-          {mobileNavItems.map((item, index) => (
-            <li key={item}>
-              <button
-                type="button"
-                className={`w-full rounded-xl px-2 py-2 text-center text-[11px] font-medium transition ${
-                  index === 0
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                {item}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
+    <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">
+      Yuklanmoqda…
     </div>
   );
 }
 
-export default App;
+
+
+export default function App() {
+
+  return (
+
+    <Routes>
+
+      <Route path="/login" element={<LoginPage />} />
+
+
+
+      <Route element={<RequireAuth role="admin" />}>
+
+        <Route element={<AppLayout />}>
+
+          <Route index element={<Dashboard />} />
+
+          <Route path="ustalar" element={<UstalarPage />} />
+          <Route path="asistenlar" element={<AsistenlarPage />} />
+          <Route path="usta-faolligi" element={<UstaFaollikPage />} />
+          <Route path="yorijnoma" element={<YorijnomaAdminPage />} />
+          <Route path="hisobot" element={<HisobotAdminPage />} />
+          <Route path="admin/commercial-offers" element={<CommercialOffersPage />} />
+          <Route path="admin/supply" element={<TaminotPage />} />
+          <Route path="admin/contacts" element={<ContactsPage />} />
+          <Route path="commercial-offers" element={<CommercialOffersPage />} />
+          <Route path="supply" element={<TaminotPage />} />
+          <Route path="jalba" element={<JalbaAdminPage />} />
+
+          <Route path="brigadalar" element={<BrigadalarPage />} />
+
+          <Route path="loyihalar" element={<LoyihalarPage />} />
+
+          <Route
+
+            path="vazifalar"
+
+            element={<SectionPage {...SECTION_COPY.vazifalar} />}
+
+          />
+
+          <Route path="xarajatlar" element={<XarajatlarPage />} />
+
+          <Route path="rasmlar" element={<RasmlarPage />} />
+
+          <Route
+
+            path="sifat-nazorati"
+
+            element={<SectionPage {...SECTION_COPY["sifat-nazorati"]} />}
+
+          />
+
+          <Route path="tahlil" element={<TahlilPage />} />
+
+          <Route
+            path="admin/monthly-reports"
+            element={
+              <Suspense fallback={<PageFallback />}>
+                <MonthlyReportsPage />
+              </Suspense>
+            }
+          />
+
+          <Route path="viloyat-ish-kunlari" element={<ViloyatIshKunlariPage />} />
+
+          <Route path="ish-vaqtlari" element={<IshVaqtalariPage />} />
+
+          <Route
+
+            path="monitoring"
+
+            element={<SectionPage {...SECTION_COPY.monitoring} />}
+
+          />
+
+          <Route path="sozlamalar" element={<SozlamalarPage />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+
+        </Route>
+
+      </Route>
+
+
+
+      <Route element={<RequireAuth role="usta" />}>
+
+        <Route path="/usta-panel" element={<UstaLayout />}>
+
+          <Route index element={<UstaPanelPage />} />
+
+          <Route path="jalba" element={<UstaJalbaPage />} />
+          <Route path="loyihalar" element={<UstaLoyihalarPage />} />
+
+          <Route path="xarajatlar" element={<UstaXarajatlarPage />} />
+
+          <Route path="rasmlar" element={<UstaRasmlarPage />} />
+
+          <Route path="ish-vaqti" element={<UstaIshVaqtlariPage />} />
+
+        </Route>
+
+      </Route>
+
+      <Route element={<RequireAuth role="asisten" />}>
+        <Route path="/asisten-panel" element={<AsistenLayout />}>
+          <Route index element={<AsistenPanelPage />} />
+          <Route path="loyihalar" element={<LoyihalarPage />} />
+          <Route
+            path="monthly-reports"
+            element={
+              <Suspense fallback={<PageFallback />}>
+                <MonthlyReportsPage />
+              </Suspense>
+            }
+          />
+          <Route path="tijoriy-taklif" element={<CommercialOffersPage />} />
+          <Route path="taminot" element={<TaminotPage />} />
+          <Route path="ish-vaqti" element={<AsistenIshVaqtiPage />} />
+          <Route path="rasmlar" element={<RasmlarPage />} />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<CatchAllRedirect />} />
+
+    </Routes>
+
+  );
+
+}
+

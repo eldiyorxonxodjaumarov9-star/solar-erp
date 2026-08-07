@@ -22,6 +22,7 @@ export const COLLECTIONS = [
   "telegram_events",
   "telegramAttendanceLogs",
   "dailyAttendanceReports",
+  "supplyCalculations",
 ];
 
 const SQLITE_PATH =

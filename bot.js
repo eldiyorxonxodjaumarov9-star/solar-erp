@@ -164,9 +164,13 @@ async function sendMorningGreeting(config) {
   }
 }
 
+/**
+ * Eski «Xurmatli masterlar / Keldi-Ketdi» eslatmalari (13:00, 18:00).
+ * Default O‘CHIQ. Faqat TELEGRAM_MASTER_REMINDERS_AUTO=true bo‘lsa yoqiladi.
+ */
 function shouldSendMasterReminders() {
-  const v = String(process.env.TELEGRAM_MASTER_REMINDERS || "true").toLowerCase();
-  return v !== "false" && v !== "0" && v !== "no";
+  const v = String(process.env.TELEGRAM_MASTER_REMINDERS_AUTO || "false").toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
 }
 
 async function sendMasterMiddayReportReminder(config) {
@@ -422,7 +426,7 @@ export function startBot(config) {
   const monthlyCron = scheduleFromEnv("TELEGRAM_MONTHLY_SCHEDULE", "5 21 * * *");
   const dailyAttendanceCron = scheduleFromEnv(
     "TELEGRAM_DAILY_ATTENDANCE_SCHEDULE",
-    "0 20 * * *",
+    "0 13 * * *",
   );
 
   morningCronTask = cron.schedule(
@@ -453,10 +457,10 @@ export function startBot(config) {
       ),
     );
     console.log(
-      `[telegram] Masterlar eslatmalari yoqildi (${TASHKENT_TZ}): cron ${middayCron}, ${eveningCron}`,
+      `[telegram] Master reminder opt-in (${TASHKENT_TZ}): cron ${middayCron}, ${eveningCron}`,
     );
   } else {
-    console.log("[telegram] Masterlar eslatmalari o‘chiq (TELEGRAM_MASTER_REMINDERS=false)");
+    console.log("[telegram] Master reminder o‘chiq");
   }
 
   if (shouldPollErp()) {
@@ -466,11 +470,8 @@ export function startBot(config) {
     console.log("[telegram] TELEGRAM_ERP_POLL=on — ERP rasmlarini har 30 s tekshirish yoqildi");
     void runCycle(config);
   } else {
-    const extra = shouldSendMasterReminders()
-      ? ` + masterlar (${middayCron}, ${eveningCron})`
-      : "";
     console.log(
-      `[telegram] Kunlik salom cron (${TASHKENT_TZ}): ${morningCron}${extra}. ERP polling o‘chiq (TELEGRAM_ERP_POLL=true qo‘shing kerak bo‘lsa).`,
+      `[telegram] Kunlik salom cron (${TASHKENT_TZ}): ${morningCron}. ERP polling o‘chiq (TELEGRAM_ERP_POLL=true qo‘shing kerak bo‘lsa).`,
     );
   }
 
@@ -498,11 +499,11 @@ export function startBot(config) {
       { timezone: TASHKENT_TZ },
     );
     console.log(
-      `[telegram] Kunlik attendance hisobot cron (${TASHKENT_TZ}): ${dailyAttendanceCron}. O‘chirish: TELEGRAM_DAILY_ATTENDANCE_AUTO=false`,
+      `[telegram] Kunlik attendance hisobot cron (${TASHKENT_TZ}): ${dailyAttendanceCron}. TELEGRAM_DAILY_ATTENDANCE_AUTO=${process.env.TELEGRAM_DAILY_ATTENDANCE_AUTO ?? "true"}`,
     );
   } else {
     console.log(
-      "[telegram] Kunlik attendance hisobot o‘chiq (TELEGRAM_DAILY_ATTENDANCE_AUTO=false)",
+      `[telegram] Kunlik attendance hisobot o'chirilgan (TELEGRAM_DAILY_ATTENDANCE_AUTO=${process.env.TELEGRAM_DAILY_ATTENDANCE_AUTO ?? "false"})`,
     );
   }
 }
