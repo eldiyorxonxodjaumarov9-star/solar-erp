@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getApiBaseUrl } from "../api/apiBase.js";
 import { useAuth } from "../auth/AuthContext";
 import {
   calculateSupplyOnServer,
@@ -269,9 +270,27 @@ export default function TaminotPage() {
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
     setError("");
-    const data = await fetchSupplyCatalog();
-    setCatalog(data);
-    setCatalogLoading(false);
+    try {
+      const data = await fetchSupplyCatalog();
+      setCatalog(data);
+    } catch (e) {
+      console.error("[taminot] catalog load failed", e);
+      setCatalog({
+        ok: false,
+        errorKind: "network",
+        error:
+          e?.message ||
+          "Taminot serveriga ulanib bo‘lmadi. Internet aloqasini tekshiring yoki qayta urinib ko‘ring.",
+        panels: [],
+        inverters: [],
+        batteries: [],
+        accessories: [],
+        settings: {},
+        rules: {},
+      });
+    } finally {
+      setCatalogLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -537,6 +556,9 @@ export default function TaminotPage() {
     return (
       <section className="rounded-[1.375rem] border border-slate-200/85 bg-white p-6 shadow-soft-lg">
         <p className="text-sm text-slate-500">Taminot katalogi yuklanmoqda…</p>
+        <p className="mt-2 text-xs text-slate-400">
+          API: {getApiBaseUrl() || "(relative)"}/api/supply/health
+        </p>
       </section>
     );
   }
@@ -547,15 +569,25 @@ export default function TaminotPage() {
       ? "Taminot serveriga ulanib bo‘lmadi"
       : "Taminot ma’lumotlar bazasi topilmadi";
     const detail = isNetwork
-      ? "Internet aloqasini tekshiring yoki qayta urinib ko‘ring."
+      ? "VPS (77.237.237.94) javob bermayapti yoki internet yo‘q. Bir necha soniyadan keyin qayta urinib ko‘ring."
       : catalog?.error ||
         "Serverda data/supply (database.db) topilmadi. Administratorga murojaat qiling.";
+    const debugLine = [
+      catalog?.debug?.platform,
+      catalog?.debug?.apiBase,
+      catalog?.debug?.status != null ? `status=${catalog.debug.status}` : null,
+      catalog?.debug?.errorName,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     return (
       <section className="rounded-[1.375rem] border border-rose-200 bg-rose-50/60 p-6 shadow-soft-lg sm:p-8">
         <h2 className="text-xl font-semibold text-rose-900">{title}</h2>
         <p className="mt-2 text-sm text-rose-800">{catalog?.error || detail}</p>
-        {!isNetwork ? (
-          <p className="mt-1 text-xs text-rose-700">{detail}</p>
+        {debugLine ? (
+          <p className="mt-2 break-all font-mono text-[11px] text-rose-700/80">
+            {debugLine}
+          </p>
         ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <PrimaryBtn onClick={loadCatalog}>Qayta urinish</PrimaryBtn>

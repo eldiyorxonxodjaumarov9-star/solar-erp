@@ -46,7 +46,8 @@ export const MAIN_NAV = [
   { to: "/usta-faolligi", label: "Master faolligi" },
   { to: "/hisobot", label: "Hisobot" },
   { to: "/admin/commercial-offers", label: "Tijoriy taklif" },
-  { to: "/admin/supply", label: "Taminot", icon: "supply" },
+  { to: "/admin/supply", label: "Taminot", icon: "supply", end: true },
+  { to: "/admin/supply/reload", label: "Taminot bazani yangilash", icon: "supply" },
   { to: "/admin/contacts", label: "Contactlar" },
   { to: "/jalba", label: "Jalba" },
   { to: "/yorijnoma", label: "Yo‘riqnoma" },
@@ -128,6 +129,10 @@ export const SECTION_COPY = {
   supply: {
     title: "Taminot",
     description: "Taminot bo‘limi",
+  },
+  "supply-reload": {
+    title: "Taminot bazani yangilash",
+    description: "Serverdagi Taminot katalogini qayta yuklash.",
   },
   monitoring: {
     title: "Monitoring",

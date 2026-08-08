@@ -198,17 +198,34 @@ try {
     }
   }
   console.log("[apk] ANDROID API BASE:", androidApi || "(MISSING — APK Taminot ishlamaydi!)");
-  if (!androidApi || /127\.0\.0\.1|localhost/i.test(androidApi)) {
-    console.error("[apk] Production APK uchun VITE_ANDROID_API_BASE VPS URL bo‘lishi shart.");
+  if (
+    !androidApi ||
+    /127\.0\.0\.1|localhost|192\.168\.|:\s*5000\b/i.test(androidApi)
+  ) {
+    console.error(
+      "[apk] Production APK uchun VITE_ANDROID_API_BASE=http://77.237.237.94 bo‘lishi shart.",
+    );
     process.exit(1);
+  }
+  if (!/^https?:\/\/77\.237\.237\.94\/?$/i.test(androidApi)) {
+    console.warn(
+      "[apk] Diqqat: ANDROID API BASE VPS IP emas:",
+      androidApi,
+      "— tavsiya: http://77.237.237.94",
+    );
   }
   run("npm run build", root, {
     VITE_API_BASE_HTTP: "",
     VITE_ANDROID_API_BASE: androidApi,
     VITE_API_BASE: androidApi,
+    VITE_NATIVE_API_BASE: androidApi,
   });
 
-  console.log("[apk] 2/3 cap sync android…");
+  console.log("[apk] 2/4 gradle clean + cap sync…");
+  run(`${gradlew} clean`, androidDir, {
+    JAVA_HOME: javaHome,
+    GRADLE_USER_HOME: gradleUserHome,
+  });
   run("npx cap sync android", root);
 
   const versionCode = nextVersionCode(root);
@@ -223,7 +240,7 @@ try {
   };
   console.log("[apk] GRADLE_USER_HOME:", gradleUserHome);
 
-  console.log("[apk] 3/3 gradle assembleDebug…");
+  console.log("[apk] 3/4 gradle assembleDebug…");
   run(`${gradlew} assembleDebug`, androidDir, {
     ...gradleEnv,
     SOLARERP_VERSION_CODE: String(versionCode),

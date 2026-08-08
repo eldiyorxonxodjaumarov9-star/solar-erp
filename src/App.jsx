@@ -47,6 +47,7 @@ import HisobotAdminPage from "./pages/HisobotAdminPage";
 import CommercialOffersPage from "./pages/CommercialOffersPage";
 import ContactsPage from "./pages/ContactsPage";
 import TaminotPage from "./pages/TaminotPage";
+import TaminotBazaYangilashPage from "./pages/TaminotBazaYangilashPage";
 import JalbaAdminPage from "./pages/JalbaAdminPage";
 import UstaJalbaPage from "./pages/UstaJalbaPage";
 import AsistenlarPage from "./pages/AsistenlarPage";
@@ -91,9 +92,11 @@ export default function App() {
           <Route path="hisobot" element={<HisobotAdminPage />} />
           <Route path="admin/commercial-offers" element={<CommercialOffersPage />} />
           <Route path="admin/supply" element={<TaminotPage />} />
+          <Route path="admin/supply/reload" element={<TaminotBazaYangilashPage />} />
           <Route path="admin/contacts" element={<ContactsPage />} />
           <Route path="commercial-offers" element={<CommercialOffersPage />} />
           <Route path="supply" element={<TaminotPage />} />
+          <Route path="supply/reload" element={<TaminotBazaYangilashPage />} />
           <Route path="jalba" element={<JalbaAdminPage />} />
 
           <Route path="brigadalar" element={<BrigadalarPage />} />

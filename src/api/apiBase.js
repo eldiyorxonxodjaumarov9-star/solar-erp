@@ -3,12 +3,21 @@
  * Desktop/dev → VITE_API_BASE_HTTP (localhost)
  * Android APK → VITE_ANDROID_API_BASE yoki VITE_API_BASE (VPS)
  */
+import { Capacitor } from "@capacitor/core";
+
 function trimBase(raw) {
   if (typeof raw !== "string") return "";
   return raw.trim().replace(/\/+$/, "");
 }
 
 export function isNativeCapacitor() {
+  try {
+    if (typeof Capacitor?.isNativePlatform === "function") {
+      return Boolean(Capacitor.isNativePlatform());
+    }
+  } catch {
+    /* ignore */
+  }
   if (typeof window === "undefined") return false;
   const C = window.Capacitor;
   return Boolean(
@@ -18,8 +27,15 @@ export function isNativeCapacitor() {
 
 export function isAndroidNative() {
   if (!isNativeCapacitor()) return false;
-  const C = window.Capacitor;
-  if (typeof C.getPlatform === "function") {
+  try {
+    if (typeof Capacitor?.getPlatform === "function") {
+      return String(Capacitor.getPlatform()).toLowerCase() === "android";
+    }
+  } catch {
+    /* ignore */
+  }
+  const C = typeof window !== "undefined" ? window.Capacitor : null;
+  if (C && typeof C.getPlatform === "function") {
     return String(C.getPlatform()).toLowerCase() === "android";
   }
   return /android/i.test(navigator.userAgent || "");
@@ -44,6 +60,9 @@ function isLoopbackOrLan(url) {
   }
 }
 
+/** Production APK hard fallback — hech qachon localhost bo‘lmasin. */
+export const ANDROID_PRODUCTION_API_BASE = "http://77.237.237.94";
+
 /**
  * Android production uchun public VPS API.
  * Localhost / LAN URLlar APK buildda rad etiladi.
@@ -54,14 +73,16 @@ export function getAndroidApiBase() {
   const nativeFallback = trimBase(
     import.meta.env.VITE_NATIVE_API_BASE || "",
   );
-  const candidate = android || general || nativeFallback;
-  if (!candidate) return "";
-  if (isLoopbackOrLan(candidate) && !import.meta.env.DEV) {
+  let candidate = android || general || nativeFallback;
+  if (candidate && isLoopbackOrLan(candidate) && !import.meta.env.DEV) {
     console.error(
       "[api-base] Android production’da localhost/LAN API taqiqlangan:",
       candidate,
     );
-    return "";
+    candidate = "";
+  }
+  if (!candidate && !import.meta.env.DEV) {
+    candidate = ANDROID_PRODUCTION_API_BASE;
   }
   return candidate;
 }
@@ -75,7 +96,11 @@ export function getDesktopApiBase() {
  * Yagona resolver.
  */
 export function getApiBaseUrl() {
-  if (isAndroidNative() || (isNativeCapacitor() && !isLocalHost())) {
+  // Capacitor Android: doimo public VPS (localhost/LAN yo‘q)
+  if (isAndroidNative()) {
+    return getAndroidApiBase();
+  }
+  if (isNativeCapacitor() && !import.meta.env.DEV) {
     return getAndroidApiBase();
   }
   if (import.meta.env.DEV) {
@@ -90,7 +115,7 @@ export function getApiBaseUrl() {
 /** So‘rov kandidatlari (fallback zanjiri). */
 export function getApiBaseCandidates() {
   if (isAndroidNative() || (isNativeCapacitor() && !import.meta.env.DEV)) {
-    const android = getAndroidApiBase();
+    const android = getAndroidApiBase() || ANDROID_PRODUCTION_API_BASE;
     return android ? [android] : [];
   }
   if (import.meta.env.DEV) {

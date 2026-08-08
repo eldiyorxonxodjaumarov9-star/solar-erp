@@ -7,6 +7,12 @@ import {
   reloadSupplyCatalog,
   toPublicCatalog,
 } from "../supply/catalogStore.js";
+import {
+  afterMutation,
+  createSupplyProduct,
+  deleteSupplyProduct,
+  updateSupplyProduct,
+} from "../supply/adminProductCrud.js";
 import { resolveSupplyDir } from "../supply/supplyDir.js";
 import { SupplyCalculator } from "../supply/SupplyCalculator.js";
 import { SupplyRepository } from "../supply/SupplyRepository.js";
@@ -251,6 +257,39 @@ export function createSupplyRouter() {
       inverterCount: internal.inverters.length,
       batteryCount: internal.batteries.length,
     });
+  });
+
+  router.post("/products", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const created = createSupplyProduct(req.body || {});
+      afterMutation();
+      return res.json({ ok: true, ...created });
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: e?.message || "Qo‘shishda xato" });
+    }
+  });
+
+  router.put("/products/:id", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const updated = updateSupplyProduct(req.params.id, req.body || {});
+      afterMutation();
+      return res.json({ ...updated, ok: true });
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: e?.message || "Yangilashda xato" });
+    }
+  });
+
+  router.delete("/products/:id", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const deleted = deleteSupplyProduct(req.params.id);
+      afterMutation();
+      return res.json({ ...deleted, ok: true });
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: e?.message || "O‘chirishda xato" });
+    }
   });
 
   return router;

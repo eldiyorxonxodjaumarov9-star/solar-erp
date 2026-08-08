@@ -7,6 +7,7 @@ export {
   fetchSupplyCatalog,
   calculateSupplyOnServer,
   reloadSupplyCatalog,
+  fetchAdminSupplyCatalog,
   adminSupplyHeaders,
 } from "./catalogApi.js";
 export { suggestInverters, isInverterCompatible } from "./inverterCalculator.js";
