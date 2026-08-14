@@ -85,7 +85,7 @@ export async function sendWorkPhotoAndGeoToTelegram({ payload, file }) {
 
     const result = await withTimeout(
       api.postFormData("/api/telegram/work-log-photo", form),
-      30_000,
+      90_000,
       "Serverga rasm yuborish vaqti tugadi",
     );
     photoOk = true;

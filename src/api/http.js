@@ -8,6 +8,7 @@
  */
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import {
+  androidPublicApiPath,
   getApiBaseCandidates,
   getApiBaseUrl,
   isAndroidNative,
@@ -18,7 +19,47 @@ import {
 logApiBaseOnce();
 
 const JSON_TIMEOUT_MS = 12000;
-const FORMDATA_TIMEOUT_MS = 20000;
+const FORMDATA_TIMEOUT_MS = 90000;
+const PHOTO_TIMEOUT_MS = 90000;
+
+function timeoutForPath(path) {
+  if (/\/telegram\/|\/upload\/|stage-photo|work-log-photo|yorijnoma/i.test(path)) {
+    return PHOTO_TIMEOUT_MS;
+  }
+  return JSON_TIMEOUT_MS;
+}
+
+async function blobToBase64(blob) {
+  const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function formDataToJsonPayload(formData) {
+  const out = {};
+  for (const [key, value] of formData.entries()) {
+    if (typeof Blob !== "undefined" && value instanceof Blob) {
+      const b64 = await blobToBase64(value);
+      const name = "name" in value && value.name ? value.name : `${key}.bin`;
+      const mime = value.type || "application/octet-stream";
+      if (key === "image" || key === "video") {
+        out[`${key}Base64`] = b64;
+        out[`${key}Name`] = name;
+        out[`${key}Mime`] = mime;
+      } else {
+        out[key] = b64;
+      }
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
 
 function withTimeout(ms) {
   if (typeof AbortController === "undefined") {
@@ -214,13 +255,15 @@ async function requestOnce(base, path, options = {}) {
 
 async function request(path, options = {}) {
   ensureApiBaseForNative();
+  const resolved = androidPublicApiPath(path);
+  const timeoutMs = options.timeoutMs || timeoutForPath(resolved);
   const bases = getApiBaseCandidates();
   let lastError = null;
 
   for (let i = 0; i < bases.length; i += 1) {
     const base = bases[i];
     try {
-      return await requestOnce(base, path, options);
+      return await requestOnce(base, resolved, { ...options, timeoutMs });
     } catch (error) {
       lastError = error;
       const hasNext = i < bases.length - 1;
@@ -237,13 +280,21 @@ async function request(path, options = {}) {
 
 async function postFormData(path, formData) {
   ensureApiBaseForNative();
-  // FormData native CapacitorHttp da murakkab — web fetch (Android cleartext OK)
+  const resolved = androidPublicApiPath(path);
+  if (useNativeHttp()) {
+    const payload = await formDataToJsonPayload(formData);
+    return request(resolved, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      timeoutMs: timeoutForPath(resolved),
+    });
+  }
   const bases = getApiBaseCandidates();
   let lastError = null;
 
   for (let i = 0; i < bases.length; i += 1) {
     const base = bases[i];
-    const url = `${base}${path}`;
+    const url = `${base}${resolved}`;
     const t = withTimeout(FORMDATA_TIMEOUT_MS);
     let res;
     try {

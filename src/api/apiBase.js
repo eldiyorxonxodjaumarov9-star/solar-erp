@@ -137,6 +137,15 @@ export function getApiBaseCandidates() {
   return remote ? [remote] : [""];
 }
 
+export function androidPublicApiPath(path) {
+  const p = String(path || "");
+  if (!p.startsWith("/api/")) return p;
+  if (p.startsWith("/api/supply/")) return p;
+  if (!isAndroidNative() && !isNativeCapacitor()) return p;
+  // nginx /api/ → Chorvoq :5000; Solar ERP faqat /api/supply/ orqali ochiq
+  return `/api/supply/compat${p.slice(4)}`;
+}
+
 export function logApiBaseOnce() {
   if (typeof window === "undefined") return;
   const key = "__solar_api_base_logged";

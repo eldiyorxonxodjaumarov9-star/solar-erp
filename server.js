@@ -93,11 +93,64 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: "25mb" }));
-app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+app.use(express.json({ limit: "80mb" }));
+app.use(express.urlencoded({ extended: true, limit: "80mb" }));
 const upload = multer({ storage: multer.memoryStorage() });
 const UPLOADS_DIR = path.join(__dirname, "data", "uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+function bufferFromBase64Field(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  const comma = s.indexOf(",");
+  const b64 = comma >= 0 ? s.slice(comma + 1) : s.replace(/\s/g, "");
+  try {
+    const buf = Buffer.from(b64, "base64");
+    return buf.length ? buf : null;
+  } catch {
+    return null;
+  }
+}
+
+/** APK: nginx /api/ faqat Chorvoq (5000). Solar ERP marshrutlari /api/supply/compat/* orqali keladi. */
+app.use((req, _res, next) => {
+  const raw = String(req.originalUrl || req.url || "");
+  const qIdx = raw.indexOf("?");
+  const p = qIdx >= 0 ? raw.slice(0, qIdx) : raw;
+  const q = qIdx >= 0 ? raw.slice(qIdx) : "";
+  const prefix = "/api/supply/compat/";
+  if (p.startsWith(prefix)) {
+    req.url = `/api/${p.slice(prefix.length)}${q}`;
+  }
+  next();
+});
+
+function attachJsonUploadedFile(fieldName = "image") {
+  return (req, _res, next) => {
+    if (req.file?.buffer?.length) return next();
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const buf = bufferFromBase64Field(
+      body[`${fieldName}Base64`] ||
+        body.imageBase64 ||
+        body.imageData ||
+        body.videoBase64,
+    );
+    if (!buf) return next();
+    const mime = String(
+      body[`${fieldName}Mime`] || body.mimeType || "image/jpeg",
+    );
+    const name = String(
+      body[`${fieldName}Name`] || body.fileName || `${fieldName}.jpg`,
+    );
+    req.file = {
+      buffer: buf,
+      originalname: name,
+      mimetype: mime,
+      size: buf.length,
+    };
+    next();
+  };
+}
 
 void initDb().catch((err) => {
   console.error("[db] init xatosi:", err?.message || err);
@@ -634,7 +687,7 @@ async function sendWorkLocationToTelegram({ workLocation, workerName, mode }) {
   }
 }
 
-app.post("/api/telegram/work-log-photo", upload.single("image"), async (req, res) => {
+app.post("/api/telegram/work-log-photo", upload.single("image"), attachJsonUploadedFile("image"), async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const mode = String(payload.mode || "").trim(); // arrival | departure
@@ -761,7 +814,7 @@ app.post("/api/telegram/work-log-photo", upload.single("image"), async (req, res
   }
 });
 
-app.post("/api/upload/process-image", upload.single("image"), async (req, res) => {
+app.post("/api/upload/process-image", upload.single("image"), attachJsonUploadedFile("image"), async (req, res) => {
   try {
     if (!req.file?.buffer?.length) {
       return res.status(400).json({ ok: false, error: "Rasm topilmadi" });

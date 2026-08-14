@@ -838,6 +838,7 @@ export default function LoyihalarPage() {
   const { workers, refresh: refreshWorkers } = useWorkers();
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState("");
+  const [holatFilter, setHolatFilter] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState("create");
   const [editingId, setEditingId] = useState(null);
@@ -869,8 +870,17 @@ export default function LoyihalarPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return projects;
+    const holatWanted = holatFilter.trim().toLowerCase();
     return projects.filter((p) => {
+      if (holatWanted) {
+        const h = String(p.holat || "").trim().toLowerCase();
+        const matchHolat =
+          h === holatWanted ||
+          (holatWanted === "tugallangan" &&
+            (h === "tugallandi" || h === "yakunlangan"));
+        if (!matchHolat) return false;
+      }
+      if (!q) return true;
       const name = (p.clientName || "").toLowerCase();
       const addr = (p.address || "").toLowerCase();
       const num = projectNumberKey(p.projectNumber || "");
@@ -881,7 +891,7 @@ export default function LoyihalarPage() {
         (qNum !== "" && num.includes(qNum))
       );
     });
-  }, [projects, query]);
+  }, [projects, query, holatFilter]);
 
   const enriched = useMemo(() => {
     const rows = filtered.map((p) => {
@@ -985,18 +995,38 @@ export default function LoyihalarPage() {
           </button>
         </div>
 
-        <div className="mt-6">
-          <label htmlFor="pj-search" className="sr-only">
-            Qidiruv
-          </label>
-          <input
-            id="pj-search"
-            type="search"
-            placeholder="Mijoz ismi yoki manzil bo‘yicha qidirish..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none ring-slate-900/[0.04] transition-all placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-400/25 sm:max-w-md"
-          />
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1 sm:max-w-md">
+            <label htmlFor="pj-search" className="sr-only">
+              Qidiruv
+            </label>
+            <input
+              id="pj-search"
+              type="search"
+              placeholder="Mijoz ismi yoki manzil bo‘yicha qidirish..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none ring-slate-900/[0.04] transition-all placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-400/25"
+            />
+          </div>
+          <div className="w-full sm:w-56">
+            <label htmlFor="pj-holat-filter" className="mb-1.5 block text-sm font-medium text-slate-700">
+              Holat
+            </label>
+            <select
+              id="pj-holat-filter"
+              value={holatFilter}
+              onChange={(e) => setHolatFilter(e.target.value)}
+              className="w-full rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none ring-slate-900/[0.04] transition-all focus:border-brand-400 focus:ring-2 focus:ring-brand-400/25"
+            >
+              <option value="">Barchasi</option>
+              {PROJECT_HOLAT_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {enriched.length === 0 ? (
@@ -1009,7 +1039,7 @@ export default function LoyihalarPage() {
             <p className="mt-2 text-sm text-slate-500">
               {projects.length === 0
                 ? "Yangi loyiha qo‘shish uchun yuqoridagi tugmani bosing."
-                : "Qidiruv so‘zini o‘zgartirib ko‘ring."}
+                : "Qidiruv yoki holat filtrini o‘zgartirib ko‘ring."}
             </p>
           </div>
         ) : (

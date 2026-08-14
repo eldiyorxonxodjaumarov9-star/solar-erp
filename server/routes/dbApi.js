@@ -47,6 +47,27 @@ export function createDbRouter() {
   router.post("/upload/stage-video", upload.single("video"), (req, res) => {
     try {
       if (!req.file) {
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const raw = String(body.videoBase64 || "").trim();
+        if (raw) {
+          const comma = raw.indexOf(",");
+          const b64 = comma >= 0 ? raw.slice(comma + 1) : raw.replace(/\s/g, "");
+          const buf = Buffer.from(b64, "base64");
+          if (buf.length) {
+            fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+            const ext = path.extname(String(body.videoName || body.fileName || "")) || ".mp4";
+            const filename = `stage-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+            const dest = path.join(UPLOADS_DIR, filename);
+            fs.writeFileSync(dest, buf);
+            req.file = {
+              path: dest,
+              filename,
+              originalname: String(body.videoName || body.fileName || filename),
+            };
+          }
+        }
+      }
+      if (!req.file) {
         return res.status(400).json({ ok: false, error: "Video fayl kerak" });
       }
       const rel = path.relative(path.join(__dirname, "..", ".."), req.file.path);

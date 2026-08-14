@@ -728,7 +728,11 @@ export default function UstaLoyihalarPage() {
       } catch (firstError) {
         const msg = firstError instanceof Error ? firstError.message : "";
         // Transient proxy/network hiccups sometimes produce generic "Request failed".
-        if (msg === "Request failed" || msg === "Serverga ulanish yo‘q") {
+        if (
+          msg === "Request failed" ||
+          msg === "Serverga ulanish yo‘q" ||
+          /route not found/i.test(msg)
+        ) {
           await new Promise((resolve) => setTimeout(resolve, 400));
           try {
             await api.post("/api/telegram/stage-photos", payload);

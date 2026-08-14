@@ -48,46 +48,93 @@ backup="${target}.backup-${ts}"
 cp -a "$target" "$backup"
 echo "Backup: $backup"
 
-if grep -qE 'location[[:space:]]+/api/supply/[[:space:]]*\{' "$target"; then
-  echo "location /api/supply/ allaqachon bor — duplicate qo'shilmadi."
-else
-  tmp=$(mktemp)
-  python3 - "$target" "$tmp" <<'PY'
+tmp=$(mktemp)
+python3 - "$target" "$tmp" <<'PY'
 import re
 import sys
 
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src, encoding="utf-8", errors="replace").read()
 
-block = """    location /api/supply/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
+def loc_block(path):
+    return (
+        f"    location {path} {{\n"
+        "        client_max_body_size 80m;\n"
+        "        proxy_pass http://127.0.0.1:3000;\n"
+        "        proxy_http_version 1.1;\n"
+        "\n"
+        "        proxy_set_header Host $host;\n"
+        "        proxy_set_header X-Real-IP $remote_addr;\n"
+        "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+        "        proxy_set_header X-Forwarded-Proto $scheme;\n"
+        "\n"
+        "        proxy_connect_timeout 30s;\n"
+        "        proxy_read_timeout 180s;\n"
+        "        proxy_send_timeout 180s;\n"
+        "    }\n"
+        "\n"
+    )
 
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_connect_timeout 30s;
-        proxy_read_timeout 120s;
-        proxy_send_timeout 120s;
-    }
-
-"""
-
-# Exact location /api/ { — not /api/supply/ or /api/something
-pat = re.compile(r'(^[ \t]*location\s+/api/\s*\{)', re.M)
-m = pat.search(text)
+# Exact location /api/ { — not /api/supply/ or /api/telegram/
+pat_api = re.compile(r'(^[ \t]*location\s+/api/\s*\{)', re.M)
+m = pat_api.search(text)
 if not m:
     raise SystemExit("ERROR: location /api/ insert nuqtasi topilmadi")
 
-text = text[: m.start()] + block + text[m.start() :]
+# Do NOT modify location /api/ (Chorvoq :5000).
+# Solar ERP photo/API prefixes must be longer and sit BEFORE /api/.
+needed = [
+    "/api/supply/",
+    "/api/telegram/",
+    "/api/upload/",
+    "/api/db/",
+    "/api/media/",
+    "/api/reports/",
+]
+
+insert = []
+for path in needed:
+    if re.search(r'location\s+' + re.escape(path) + r'\s*\{', text):
+        print(f"already present: location {path}")
+    else:
+        insert.append(loc_block(path))
+        print(f"will insert: location {path}")
+
+if insert:
+    text = text[: m.start()] + "".join(insert) + text[m.start() :]
+
+# Existing /api/supply/ may lack body size (nginx default 1m → rasm 413)
+def ensure_body_size(src_text, path):
+    loc_re = re.compile(
+        r'(location\s+' + re.escape(path) + r'\s*\{)([^{}]*)\}',
+        re.M,
+    )
+    match = loc_re.search(src_text)
+    if not match:
+        return src_text
+    body = match.group(2)
+    if "client_max_body_size" in body:
+        if re.search(r'client_max_body_size\s+\d+[kKmMgG]?', body):
+            body2 = re.sub(
+                r'client_max_body_size\s+\d+[kKmMgG]?\s*;',
+                "client_max_body_size 80m;",
+                body,
+                count=1,
+            )
+            return src_text[: match.start()] + match.group(1) + body2 + "}" + src_text[match.end() :]
+        return src_text
+    injected = match.group(1) + "\n        client_max_body_size 80m;" + body + "}"
+    print(f"added client_max_body_size 80m to {path}")
+    return src_text[: match.start()] + injected + src_text[match.end() :]
+
+for path in needed:
+    text = ensure_body_size(text, path)
+
 open(dst, "w", encoding="utf-8", newline="\n").write(text)
-print("Inserted location /api/supply/ before location /api/")
+print("nginx photo/supply proxy blocks ready (location /api/ unchanged)")
 PY
-  cp "$tmp" "$target"
-  rm -f "$tmp"
-fi
+cp "$tmp" "$target"
+rm -f "$tmp"
 
 echo "== nginx -t =="
 if ! nginx -t; then
@@ -112,6 +159,23 @@ echo
 echo "--- public catalog (first 300 bytes) ---"
 curl -sS http://77.237.237.94/api/supply/catalog | head -c 300
 echo
+
+echo "--- public telegram (Solar ERP 400, Chorvoq 404 emas) ---"
+tg_code=$(curl -sS -o /tmp/solar-tg-test.json -w '%{http_code}' \
+  -X POST http://127.0.0.1:3000/api/telegram/stage-photos \
+  -H 'Content-Type: application/json' \
+  -d '{}')
+echo "local :3000 /api/telegram/stage-photos → $tg_code $(head -c 120 /tmp/solar-tg-test.json)"
+pub_tg=$(curl -sS -o /tmp/solar-tg-pub.json -w '%{http_code}' \
+  -X POST http://77.237.237.94/api/telegram/stage-photos \
+  -H 'Content-Type: application/json' \
+  -d '{}')
+echo "public /api/telegram/stage-photos → $pub_tg $(head -c 160 /tmp/solar-tg-pub.json)"
+pub_compat=$(curl -sS -o /tmp/solar-tg-compat.json -w '%{http_code}' \
+  -X POST http://77.237.237.94/api/supply/compat/telegram/stage-photos \
+  -H 'Content-Type: application/json' \
+  -d '{}')
+echo "public /api/supply/compat/telegram/stage-photos → $pub_compat $(head -c 160 /tmp/solar-tg-compat.json)"
 
 status_line=$(echo "$public_headers" | head -n 1)
 if echo "$status_line" | grep -qE 'HTTP/[0-9.]+[[:space:]]+200'; then
