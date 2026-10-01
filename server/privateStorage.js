@@ -1,6 +1,8 @@
 import { getStorage } from 'firebase-admin/storage';
 import { getServerAdminAuth } from './firebaseAdminAuth.js';
+import { createVpsStorage } from './vpsStorage.js';
 export async function serverStorageBucket() {
+ if(process.env.PRIVATE_STORAGE_ADAPTER==='vps')return createVpsStorage(process.env.PRIVATE_MEDIA_DIR);
  const name=String(process.env.FIREBASE_STORAGE_BUCKET||'').trim();
  if(!name)throw new Error('FIREBASE_STORAGE_BUCKET required');
  const app=(await getServerAdminAuth()).app,bucket=getStorage(app).bucket(name);

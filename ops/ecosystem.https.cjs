@@ -6,5 +6,5 @@ module.exports = {apps:[{
   kill_timeout:10000,time:true,merge_logs:true,
   out_file:'/root/.pm2/logs/solar-erp-out.log',error_file:'/root/.pm2/logs/solar-erp-error.log',
   // server.js loads cwd/.env. Provision server-only credentials there; never in this file.
-  env:{NODE_ENV:'production',SERVE_STATIC:'true',PORT:'3000',BIND_HOST:'127.0.0.1',FIREBASE_PROJECT_ID:'solar-erp-51870',SOLARERP_DISABLE_BACKGROUND_TASKS:'true'}
+  env:{NODE_ENV:'production',SERVE_STATIC:'true',PORT:'3000',BIND_HOST:'127.0.0.1',FIREBASE_PROJECT_ID:'solar-erp-51870',SOLARERP_DISABLE_BACKGROUND_TASKS:'true',PRIVATE_STORAGE_ADAPTER:'vps',PRIVATE_MEDIA_DIR:'/root/solar-erp-private-media'}
 }]};
