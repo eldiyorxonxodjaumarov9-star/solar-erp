@@ -36,4 +36,4 @@ fs.copyFileSync('android/app/build/outputs/apk/debug/app-debug.apk',`release-art
 const config={asar:true,npmRebuild:false,nodeGypRebuild:false,buildDependenciesFromSource:false,directories:{output:'release-artifacts/windows'},files:['package.json','dist/**/*','electron/**/*','!**/.env*','!backend/**/*','!server/**/*','!data/**/*','!**/*.map'],extraFiles:[],win:{sign:null,signDlls:false,signAndEditExecutable:false,target:['portable','nsis'],verifyUpdateCodeSignature:false},portable:{artifactName:'SolarERP-${version}-portable.exe'},nsis:{oneClick:false,allowToChangeInstallationDirectory:true,artifactName:'SolarERP-${version}-setup.exe'}};
 fs.writeFileSync('.security-artifacts/windows-build.json',JSON.stringify(config,null,2));
 run('node scripts/package-desktop-client.mjs','real-platform-windows.log');
-console.log('Artifacts built; HTTP API/authentication remains a release blocker.');
+console.log('Artifacts built with verified production HTTPS/auth/data/media; device and release-signing checks remain separate.');

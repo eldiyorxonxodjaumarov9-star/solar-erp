@@ -21,3 +21,11 @@ VPS image metadata is recorded in mediaAssets using UUID filename, server owner,
 Back up the private media directory plus corresponding mediaAssets metadata to restricted/encrypted storage; coordinate restore so references and objects agree. Existing code backup excludes this external directory. Preserve legacy video directory data/uploads separately. Monitor filesystem space, rate/size limits, TLS renewal and backup restores. Metadata-save failures can leave inaccessible orphan objects; investigate before cleanup and never delete business objects automatically.
 
 Native build gate still requires real HTTPS/admin/data/media smoke evidence; VPS media now satisfies it without a Firebase bucket. Builds use solar-erp-51870 and https://77.237.237.94 with emulators disabled. Android debug signing and unsigned Windows packages are permitted for this delivery; release signing/device validation and prior security release risks remain separately documented.
+
+## Delivered artifacts
+
+- release-artifacts/android/SolarERP-1.0.105-debug.apk: versionCode 105, apksigner verify PASS, real Firebase fields match; no physical Android device was available for install/runtime testing.
+- release-artifacts/windows-client/SolarERP-1.0.82-portable.exe
+- release-artifacts/windows-client/SolarERP-1.0.82-setup.exe
+
+Actual packaged Electron launch PASS, login enabled, production HTTPS health 200, invalid login and tokens absent session 401. Full authorized admin flow and media were verified in the actual web UI with the same production build/config. Native authenticated flows were not independently completed on a physical Android device. Windows packages are unsigned. Package scan found zero private server/backend/env files and zero known secret matches.
