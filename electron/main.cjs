@@ -53,7 +53,7 @@ let embeddedStopFn = null;
 // Dev va o‘rnatilgan .exe bir-birini o‘chirmasligi uchun alohida userData
 try {
   const folder = isDevUi() ? "SolarERP-dev" : "SolarERP";
-  const desiredUserData = path.join(app.getPath("localAppData"), folder);
+  const desiredUserData = process.env.SOLARERP_VERIFY_USER_DATA || path.join(app.getPath("localAppData"), folder);
   app.setPath("userData", desiredUserData);
 } catch (_) {
   /* ignore */
@@ -100,6 +100,23 @@ function shouldEmbedServer() {
 }
 
 async function startEmbeddedServer() {
+  if (app.isPackaged) {
+    // Packaged clients serve UI only; no Admin credentials, SQL or bot server.
+    const express = require("express");
+    const client = express();
+    client.disable("x-powered-by");
+    client.get("/status", (_req, res) => res.json({ ok: true }));
+    client.use("/api", (_req, res) => res.status(503).json({ ok: false, error: "Remote authenticated HTTPS API required" }));
+    const uiRoot = path.join(appRootDir(), "dist");
+    client.use(express.static(uiRoot));
+    client.use((_req, res) => res.sendFile(path.join(uiRoot, "index.html")));
+    const server = await new Promise((resolve, reject) => {
+      const listener = client.listen(Number(getPort()), "127.0.0.1", () => resolve(listener));
+      listener.once("error", reject);
+    });
+    embeddedStopFn = () => server.close();
+    return;
+  }
   if (!shouldEmbedServer()) return;
   const root = appRootDir();
   try {

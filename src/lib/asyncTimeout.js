@@ -30,7 +30,7 @@ export function errorMessage(err, fallback = "Xatolik") {
 
 export function isDevAttendanceLog() {
   try {
-    return Boolean(import.meta.env?.DEV);
+    return Boolean(import.meta.env.DEV);
   } catch {
     return false;
   }

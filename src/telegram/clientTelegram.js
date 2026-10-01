@@ -1,15 +1,15 @@
 /**
  * Client-side Telegram yuborish (zaxira yo‘l).
  * Server (VPS) endpoint ishlamasa, brauzer/APK to‘g‘ridan-to‘g‘ri Telegram Bot API ga yuboradi.
- * Token .env dagi VITE_BOT_TOKEN / VITE_GROUP_CHAT_ID dan olinadi.
+ * Browser sends authenticated requests to the server; bot credentials stay server-only.
  */
 import {
   buildYorijnomaPdfBlob,
   buildYorijnomaTelegramCaption,
 } from "../usta/yorijnomaPdfExport.js";
 
-const TG_TOKEN = String(import.meta.env.VITE_BOT_TOKEN || "").trim();
-const TG_CHAT = String(import.meta.env.VITE_GROUP_CHAT_ID || "").trim();
+const TG_TOKEN = ""; // Bot secrets belong only to the server. Direct client fallback is disabled.
+const TG_CHAT = "";
 
 export function isClientTelegramConfigured() {
   return Boolean(TG_TOKEN && TG_CHAT);
@@ -17,7 +17,7 @@ export function isClientTelegramConfigured() {
 
 function ensureConfigured() {
   if (!isClientTelegramConfigured()) {
-    throw new Error("Telegram token (VITE_BOT_TOKEN) sozlanmagan");
+    throw new Error("Telegram faqat authenticated server orqali yuboriladi");
   }
 }
 

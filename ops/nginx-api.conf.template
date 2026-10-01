@@ -1,0 +1,43 @@
+# Candidate dedicated hostname. Existing shared IP /api routing is untouched.
+# Substitute __API_HOST__ only after DNS/certificate and upstream identity review.
+server {
+    listen 80;
+    server_name __API_HOST__;
+    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
+    location / { return 308 https://__API_HOST__$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name __API_HOST__;
+    ssl_certificate /etc/letsencrypt/live/__API_HOST__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__API_HOST__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 80m;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Strict-Transport-Security "max-age=86400" always;
+    location /api/ {
+        # No trailing slash: preserve /api/auth, /api/staff and business paths.
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 180s;
+        proxy_read_timeout 180s;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-store" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header Strict-Transport-Security "max-age=86400" always;
+    }
+    location /status { proxy_pass http://127.0.0.1:3000; }
+    # Media is never served as a public static directory.
+    location /uploads/ { return 404; }
+    location /media/ { return 404; }
+    location / { return 404; }
+}

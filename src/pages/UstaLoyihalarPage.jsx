@@ -1,3 +1,4 @@
+import PrivateMedia from "../components/PrivateMedia.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../api/http";
@@ -190,23 +191,7 @@ export default function UstaLoyihalarPage() {
   const galleryInputRef = useRef(null);
   const videoInputRef = useRef(null);
 
-  const currentSession = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("currentSession");
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const ustaId =
-    session?.role === "usta"
-      ? session.workerId
-      : currentSession?.role === "usta"
-        ? String(currentSession.workerId || "")
-        : "";
+  const ustaId = session?.role === "usta" ? session.workerId : "";
 
   const worker = useMemo(
     () => workers.find((w) => w.id === ustaId),
@@ -709,8 +694,10 @@ export default function UstaLoyihalarPage() {
         workerPhone: String(worker.phone || "").trim(),
         brigadeName:
           selectedProject.brigadeName || worker.brigadeName || "",
+        projectId: selectedProject.id,
         projectName: selectedProject.clientName || projectNumberDisplay(selectedProject),
         stageName: stage.name,
+        stageId: stage.id,
         photos: mine.map((ph) => String(ph.imageData || ph.imageUrl || "")).slice(0, 3),
         slotLabels: STAGE_PHOTO_SLOTS.map((slot) => getStageSlotLabel(stage.id, slot)),
         videoUrl: stageVideo?.videoUrl ? String(stageVideo.videoUrl) : "",
@@ -814,7 +801,8 @@ export default function UstaLoyihalarPage() {
           workerName: session?.name || worker?.fullName || "Usta",
           workerId: ustaId,
           workerLogin,
-          projectName: selectedProject.clientName || projectNumberDisplay(selectedProject),
+          projectId: selectedProject.id,
+        projectName: selectedProject.clientName || projectNumberDisplay(selectedProject),
           photos: allProjectPhotos,
         };
         try {
@@ -1038,7 +1026,7 @@ export default function UstaLoyihalarPage() {
                         >
                           {slotPhoto ? (
                             <>
-                              <img
+                              <PrivateMedia
                                 src={slotPhoto.imageUrl || slotPhoto.imageData}
                                 alt={slotLabel}
                                 className="aspect-[3/4] w-full object-cover"
@@ -1088,7 +1076,7 @@ export default function UstaLoyihalarPage() {
                     <p className="mt-0.5 text-[11px] text-slate-600">{getStageNote(stage.id)}</p>
                     {stageVideo?.videoUrl ? (
                       <div className="mt-2 space-y-2">
-                        <video
+                        <PrivateMedia as="video"
                           src={stageVideo.videoUrl}
                           controls
                           playsInline

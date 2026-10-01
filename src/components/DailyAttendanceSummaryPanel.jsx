@@ -52,17 +52,9 @@ export default function DailyAttendanceSummaryPanel({ dateKey }) {
     setSendNote("");
     setError("");
     try {
-      const secret = String(import.meta.env.VITE_MONTHLY_REPORT_SECRET || "").trim();
-      const headers = secret
-        ? {
-            "x-daily-attendance-secret": secret,
-            "x-monthly-report-secret": secret,
-          }
-        : {};
       const data = await api.post(
         "/api/telegram/daily-attendance-report",
         { date: dk, force: true },
-        { headers },
       );
       if (data?.skipped) {
         setSendNote("Bu kun uchun hisobot allaqachon yuborilgan (force bilan qayta urinildi).");

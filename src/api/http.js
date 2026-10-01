@@ -6,6 +6,8 @@
  * Android: CapacitorHttp.request (native) — CORS/preflight yo‘q, timeout ishlaydi.
  * Global fetch patch O‘CHIRILGAN (abort hang qilardi).
  */
+import { getClientAuth } from "../firebase.js";
+import { assertSecureApiTransport } from "./secureTransport.js";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import {
   androidPublicApiPath,
@@ -17,6 +19,14 @@ import {
 } from "./apiBase.js";
 
 logApiBaseOnce();
+export let apiConfigurationError = "";
+try { if (import.meta.env.PROD) {
+  const releaseBases=getApiBaseCandidates();
+  if(!releaseBases.length)throw new Error("Production API HTTPS URL is required.");
+  for (const base of releaseBases) {
+    assertSecureApiTransport(base,{origin:globalThis.location?.origin||'https://relative.invalid'});
+  }
+} } catch { apiConfigurationError = "API uchun ishlaydigan HTTPS server manzili kerak."; }
 
 const JSON_TIMEOUT_MS = 12000;
 const FORMDATA_TIMEOUT_MS = 90000;
@@ -253,15 +263,29 @@ async function requestOnce(base, path, options = {}) {
   return requestOnceFetch(base, path, options);
 }
 
+async function sessionHeaders(headers = {}) {
+  const result = { ...headers };
+  if (!result.Authorization && !result.authorization) {
+    const user = (await getClientAuth()).currentUser;
+    if (user && !user.isAnonymous) result.Authorization = `Bearer ${await user.getIdToken()}`;
+  }
+  return result;
+}
+function secureBase(base) {
+  assertSecureApiTransport(base, { dev: import.meta.env.DEV, origin: globalThis.location?.origin || 'https://relative.invalid' });
+}
+
 async function request(path, options = {}) {
   ensureApiBaseForNative();
   const resolved = androidPublicApiPath(path);
+  options = { ...options, headers: await sessionHeaders(options.headers) };
   const timeoutMs = options.timeoutMs || timeoutForPath(resolved);
   const bases = getApiBaseCandidates();
   let lastError = null;
 
   for (let i = 0; i < bases.length; i += 1) {
     const base = bases[i];
+    secureBase(base);
     try {
       return await requestOnce(base, resolved, { ...options, timeoutMs });
     } catch (error) {
@@ -294,6 +318,8 @@ async function postFormData(path, formData) {
 
   for (let i = 0; i < bases.length; i += 1) {
     const base = bases[i];
+    secureBase(base);
+    const headers = await sessionHeaders();
     const url = `${base}${resolved}`;
     const t = withTimeout(FORMDATA_TIMEOUT_MS);
     let res;
@@ -302,6 +328,7 @@ async function postFormData(path, formData) {
         fetch(url, {
           method: "POST",
           body: formData,
+          headers,
           signal: t.signal,
         }),
         FORMDATA_TIMEOUT_MS + 500,

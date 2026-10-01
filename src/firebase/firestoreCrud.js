@@ -7,16 +7,31 @@ import {
   getDoc,
   getDocs,
   onSnapshot,
+  or,
   query,
+  runTransaction,
   setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
+import { api } from "../api/http";
+import { collectionReadFilters } from "./queryAccess.js";
 import { ensureFirebaseAuth, getFirebaseDb } from "../firebase.js";
 
-const READ_ALIASES = {
-  workers: ["workers", "users"],
-};
+const STAFF_COLLECTIONS = new Set(['workers','assistants']);
+async function staffRequest(name, method = 'get', id = '', payload) {
+  const user = await ensureFirebaseAuth();
+  const headers = { Authorization: `Bearer ${await user.getIdToken()}` };
+  const path = `/api/staff/${name}${id ? '/' + encodeURIComponent(id) : ''}`;
+  if (method === 'get' || method === 'delete') return api[method](path, { headers });
+  return api[method](path, payload, { headers });
+}
+async function collectionQuery(db, name) {
+  const user = await ensureFirebaseAuth();
+  const { claims } = await user.getIdTokenResult();
+  const filters = collectionReadFilters(name, claims).map(filter => where(...filter));
+  return query(collection(db,name), ...(filters.length > 1 ? [or(...filters)] : filters));
+}
 
 function stripUndefined(obj) {
   if (!obj || typeof obj !== "object") return obj;
@@ -32,7 +47,7 @@ function normalizeItem(id, data) {
 }
 
 function physicalCollections(logicalName) {
-  return READ_ALIASES[logicalName] || [logicalName];
+  return [logicalName];
 }
 
 async function colRef(logicalName) {
@@ -46,12 +61,13 @@ async function ready() {
 }
 
 export async function listCollection(name) {
+  if (STAFF_COLLECTIONS.has(name)) return (await staffRequest(name)).items;
   await ready();
   const { db, names } = await colRef(name);
   const byId = new Map();
 
   for (const colName of names) {
-    const snap = await getDocs(query(collection(db, colName)));
+    const snap = await getDocs(await collectionQuery(db, colName));
     for (const docSnap of snap.docs) {
       if (!byId.has(docSnap.id)) {
         byId.set(docSnap.id, normalizeItem(docSnap.id, docSnap.data()));
@@ -63,6 +79,7 @@ export async function listCollection(name) {
 }
 
 export async function getCollectionDoc(name, id) {
+  if (STAFF_COLLECTIONS.has(name)) return (await listCollection(name)).find(item => String(item.id) === String(id)) || null;
   await ready();
   const docId = String(id || "").trim();
   if (!docId) return null;
@@ -79,10 +96,11 @@ export async function getCollectionDoc(name, id) {
 
 export async function countWhere(name, field, value) {
   try {
+    if (STAFF_COLLECTIONS.has(name)) return (await listCollection(name)).filter(item => item[field] === value).length;
     await ready();
     const { db, name: colName } = await colRef(name);
     const q = query(
-      collection(db, colName),
+      await collectionQuery(db, colName),
       where(String(field || ""), "==", value),
     );
     const snap = await getCountFromServer(q);
@@ -93,6 +111,17 @@ export async function countWhere(name, field, value) {
 }
 
 export function subscribeCollection(name, onNext, onError) {
+  if (STAFF_COLLECTIONS.has(name)) {
+    let stopped = false;
+    let timer;
+    const poll = async () => {
+      try { const items = await listCollection(name); if (!stopped) onNext(items); }
+      catch(error) { if (!stopped && onError) onError(error); }
+      finally { if (!stopped) timer = setTimeout(poll, 15000); }
+    };
+    void poll();
+    return () => { stopped = true; clearTimeout(timer); };
+  }
   let stopped = false;
   let unsubs = [];
   const merged = new Map();
@@ -108,7 +137,7 @@ export function subscribeCollection(name, onNext, onError) {
 
       for (const colName of names) {
         const unsub = onSnapshot(
-          query(collection(db, colName)),
+          await collectionQuery(db, colName),
           (snap) => {
             snap.docChanges().forEach((change) => {
               const key = change.doc.id;
@@ -143,6 +172,7 @@ export function subscribeCollection(name, onNext, onError) {
 }
 
 export function subscribeDocument(collectionName, docId, onNext, onError) {
+  if (STAFF_COLLECTIONS.has(collectionName)) return subscribeCollection(collectionName, list => onNext(list.find(item => String(item.id) === String(docId)) || null), onError);
   let stopped = false;
   let unsubs = [];
 
@@ -185,6 +215,7 @@ export function subscribeDocument(collectionName, docId, onNext, onError) {
 }
 
 export async function addCollectionDoc(name, payload) {
+  if (STAFF_COLLECTIONS.has(name)) return (await staffRequest(name, "post", "", payload)).item;
   await ready();
   const { db, name: colName } = await colRef(name);
   const now = new Date().toISOString();
@@ -195,6 +226,23 @@ export async function addCollectionDoc(name, payload) {
   });
   const ref = await addDoc(collection(db, colName), data);
   return normalizeItem(ref.id, data);
+}
+
+/** Idempotent create: retries return the first document without overwriting it. */
+export async function createCollectionDocOnce(name, id, payload) {
+  await ready();
+  const docId = String(id || "").trim();
+  if (!docId || docId.includes("/")) throw new Error("Hujjat id noto'g'ri");
+  const { db, name: colName } = await colRef(name);
+  const ref = doc(db, colName, docId);
+  return runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists()) return normalizeItem(docId, existing.data());
+    const now = new Date().toISOString();
+    const data = stripUndefined({ ...payload, createdAt: payload.createdAt || now, updatedAt: now });
+    transaction.set(ref, data);
+    return normalizeItem(docId, data);
+  });
 }
 
 export async function addCollectionDocWithId(name, id, payload) {
@@ -214,6 +262,7 @@ export async function addCollectionDocWithId(name, id, payload) {
 }
 
 export async function updateCollectionDoc(name, id, payload) {
+  if (STAFF_COLLECTIONS.has(name)) return (await staffRequest(name, "put", id, payload)).item;
   await ready();
   const docId = String(id || "").trim();
   if (!docId) throw new Error("Hujjat id kerak");
@@ -252,6 +301,7 @@ export async function updateCollectionDoc(name, id, payload) {
 }
 
 export async function deleteCollectionDoc(name, id) {
+  if (STAFF_COLLECTIONS.has(name)) return staffRequest(name, "delete", id);
   await ready();
   const docId = String(id || "").trim();
   if (!docId) return;
@@ -265,25 +315,8 @@ export async function deleteCollectionDoc(name, id) {
   }
 }
 
-export async function mergeProjectStageLock(projectId, stageId, stagePayload) {
-  await ready();
-  const pid = String(projectId || "").trim();
-  const sid = String(stageId || "").trim();
-  if (!pid || !sid) throw new Error("projectId va stageId kerak");
-
-  const db = await getFirebaseDb();
-  const ref = doc(db, "project_stage_locks", pid);
-  const snap = await getDoc(ref);
-  const prev = snap.exists() ? snap.data() : {};
-  const stages = {
-    ...(prev.stages && typeof prev.stages === "object" ? prev.stages : {}),
-    [sid]: stagePayload,
-  };
-  const payload = {
-    projectId: pid,
-    stages,
-    updatedAt: new Date().toISOString(),
-  };
-  await setDoc(ref, payload, { merge: true });
-  return normalizeItem(pid, payload);
+export async function mergeProjectStageLock(projectId, stageId, _stagePayload) {
+  const result = await getCollectionDoc('project_stage_locks',projectId);
+  if (!result?.stages?.[stageId]) throw new Error('Server bosqich yuborilishini tasdiqlamadi');
+  return result;
 }

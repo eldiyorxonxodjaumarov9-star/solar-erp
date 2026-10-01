@@ -1,52 +1,19 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  getFirestore,
-  query,
-  setDoc,
-  where,
-} from "firebase/firestore";
-import { initializeApp, getApps } from "firebase/app";
-import { getAuth, signInAnonymously } from "firebase/auth";
-import { resolveFirebaseConfigFromEnv } from "../shared/firebasePublicConfig.js";
+import { getServerAdminDb } from "./firebaseAdminAuth.js";
 import { addDaysToYMD, tashkentTodayYMD } from "../src/photos/tashkentTime.js";
 
-let dbPromise = null;
 /** @type {{ workers: unknown[]; stagePhotos: unknown[]; activityLogs: unknown[] } | null} */
 let reminderCache = null;
 let reminderCacheAt = 0;
 const REMINDER_CACHE_MS = 60_000;
 
-function firebaseConfig() {
-  return resolveFirebaseConfigFromEnv(process.env);
-}
-
 export function isFirebaseServerConfigured() {
-  const cfg = firebaseConfig();
-  return Boolean(cfg.apiKey && cfg.projectId);
+  return Boolean(process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS);
 }
-
-async function getServerDb() {
-  if (dbPromise) return dbPromise;
-  dbPromise = (async () => {
-    const cfg = firebaseConfig();
-    if (!cfg.apiKey || !cfg.projectId) {
-      throw new Error("Firebase server config yo‘q (VITE_FIREBASE_* yoki FIREBASE_*)");
-    }
-    const app = getApps().length ? getApps()[0] : initializeApp(cfg);
-    const auth = getAuth(app);
-    if (!auth.currentUser) {
-      await signInAnonymously(auth);
-    }
-    return getFirestore(app);
-  })();
-  return dbPromise;
-}
+async function getServerDb() { return getServerAdminDb(); }
 
 async function listCollection(name) {
   const db = await getServerDb();
-  const snap = await getDocs(query(collection(db, name)));
+  const snap = await db.collection(name).get();
   return snap.docs.map((docSnap) => ({
     id: docSnap.id,
     ...(docSnap.data() || {}),
@@ -66,9 +33,7 @@ async function listRecentStagePhotos() {
   if (!sinceYmd) return [];
   const sinceIso = `${sinceYmd}T00:00:00.000Z`;
   const db = await getServerDb();
-  const snap = await getDocs(
-    query(collection(db, "stage_photos"), where("uploadDate", ">=", sinceIso)),
-  );
+  const snap = await db.collection("stage_photos").where("uploadDate", ">=", sinceIso).get();
   return snap.docs.map((docSnap) => ({
     id: docSnap.id,
     ...(docSnap.data() || {}),
@@ -137,9 +102,7 @@ export async function fetchDailyAttendanceFirestoreData(dateKey) {
   /** @type {unknown[]} */
   let activityLogs = [];
   try {
-    const snap = await getDocs(
-      query(collection(db, "user_activity_logs"), where("dateKey", "==", dk)),
-    );
+    const snap = await db.collection("user_activity_logs").where("dateKey", "==", dk).get();
     activityLogs = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
   } catch (e) {
     console.warn(
@@ -157,9 +120,7 @@ export async function fetchDailyAttendanceFirestoreData(dateKey) {
   /** @type {unknown[]} */
   let stagePhotos = [];
   try {
-    const snap = await getDocs(
-      query(collection(db, "stage_photos"), where("dateKey", "==", dk)),
-    );
+    const snap = await db.collection("stage_photos").where("dateKey", "==", dk).get();
     stagePhotos = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
   } catch (e) {
     console.warn("[firebaseServer] stage_photos dateKey query:", e?.message || e);
@@ -175,9 +136,7 @@ export async function fetchDailyAttendanceFirestoreData(dateKey) {
   /** @type {unknown[]} */
   let telegramEvents = [];
   try {
-    const snap = await getDocs(
-      query(collection(db, "telegram_events"), where("dateKey", "==", dk)),
-    );
+    const snap = await db.collection("telegram_events").where("dateKey", "==", dk).get();
     telegramEvents = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
   } catch (e) {
     console.warn("[firebaseServer] telegram_events:", e?.message || e);
@@ -186,9 +145,7 @@ export async function fetchDailyAttendanceFirestoreData(dateKey) {
   /** @type {unknown[]} */
   let telegramAttendanceLogs = [];
   try {
-    const snap = await getDocs(
-      query(collection(db, "telegramAttendanceLogs"), where("date", "==", dk)),
-    );
+    const snap = await db.collection("telegramAttendanceLogs").where("date", "==", dk).get();
     telegramAttendanceLogs = snap.docs.map((d) => ({
       id: d.id,
       ...(d.data() || {}),
@@ -216,18 +173,17 @@ export async function upsertFirestoreDocument(collectionName, docId, data) {
   const db = await getServerDb();
   const id = String(docId || "").trim();
   if (!id) throw new Error("docId kerak");
-  const ref = doc(collection(db, collectionName), id);
-  await setDoc(ref, { ...data, updatedAt: new Date().toISOString() }, { merge: true });
+  const ref = db.collection(collectionName).doc(id);
+  await ref.set({ ...data, updatedAt: new Date().toISOString() }, { merge: true });
   return id;
 }
 
 export async function getFirestoreDocument(collectionName, docId) {
   if (!isFirebaseServerConfigured()) return null;
-  const { getDoc } = await import("firebase/firestore");
   const db = await getServerDb();
   const id = String(docId || "").trim();
   if (!id) return null;
-  const snap = await getDoc(doc(collection(db, collectionName), id));
-  if (!snap.exists()) return null;
+  const snap = await db.collection(collectionName).doc(id).get();
+  if (!snap.exists) return null;
   return { id: snap.id, ...(snap.data() || {}) };
 }

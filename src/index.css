@@ -27,3 +27,16 @@ body.modal-open {
 body.modal-open .mobile-bottom-nav {
   display: none !important;
 }
+
+/* Shrinking grid/flex content must not push the mobile viewport wider. */
+main, main > *, section { min-width: 0; }
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+    max-width: 100%; min-height: 44px; font-size: 16px;
+  }
+  button:not([aria-hidden="true"]), a[role="button"] { min-height: 44px; }
+  main p, main h1, main h2, main h3, main label { overflow-wrap: anywhere; }
+  main section { padding: 16px; }
+  main .overflow-x-auto { max-width: 100%; overscroll-behavior-x: contain; }
+  [role="dialog"], [role="menu"] { max-width: calc(100vw - 24px); }
+}

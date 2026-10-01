@@ -81,9 +81,10 @@ export default function SozlamalarPage() {
       <div className="mt-6 rounded-[1rem] border border-slate-200/90 bg-white px-4 py-6 sm:px-6">
         <p className="text-sm font-semibold text-slate-800">Admin login va parol</p>
         <p className="mt-2 text-xs text-slate-500 sm:text-sm">
-          Bu yerda admin akkaunt ma'lumotlarini o'zgartirishingiz mumkin.
+          Admin login/paroli server secret sozlamasida boshqariladi; lokal o'zgartirish o'chirilgan.
         </p>
         <form onSubmit={handleSubmit} className="mt-4 grid gap-3 sm:grid-cols-2">
+          <fieldset disabled className="contents">
           <label className="text-left text-xs font-medium text-slate-600 sm:col-span-2">
             Joriy parol
             <input
@@ -124,6 +125,7 @@ export default function SozlamalarPage() {
               Saqlash
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
     </section>

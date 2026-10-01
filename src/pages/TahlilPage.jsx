@@ -169,7 +169,6 @@ export default function TahlilPage() {
   }, [reportY, reportM, projects, expenses, workLogs, workers, activityLogs]);
 
   const sendMonthlyToTelegram = async () => {
-    const secret = String(import.meta.env.VITE_MONTHLY_REPORT_SECRET || "").trim();
     setReportBusy(true);
     try {
       await api.post(
@@ -183,7 +182,6 @@ export default function TahlilPage() {
           workers,
           activityLogs,
         },
-        secret ? { headers: { "x-monthly-report-secret": secret } } : {},
       );
       alert("Telegram guruhiga 3 ta fayl yuborildi.");
     } catch (e) {
@@ -632,11 +630,7 @@ export default function TahlilPage() {
             {monthlyStats.activityRows}
           </p>
           <p className="mt-2 text-xs text-slate-500">
-            Fayllar: {monthlyStats.reportFiles.join(", ")}. Serverda{" "}
-            <code className="rounded bg-slate-100 px-1">TELEGRAM_MONTHLY_REPORT_SECRET</code>{" "}
-            bo‘lsa, frontend{" "}
-            <code className="rounded bg-slate-100 px-1">VITE_MONTHLY_REPORT_SECRET</code> bilan bir xil
-            qiling.
+            Fayllar: {monthlyStats.reportFiles.join(", ")}. Hisobotni admin yuboradi.
           </p>
         </div>
       </div>

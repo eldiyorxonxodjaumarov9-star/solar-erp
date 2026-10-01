@@ -1,17 +1,12 @@
 import { api, getApiBaseUrl, isAndroidNative, isNativeCapacitor } from "../../api/http.js";
-import { loadAdminCredentials } from "../../auth/adminDefaults.js";
+import { ensureFirebaseAuth } from "../../firebase.js";
 
 /**
  * Admin so‘rov headerlari (server narx endpointlari uchun).
  */
-export function adminSupplyHeaders(session) {
-  if (!session || session.role !== "admin") return {};
-  const creds = loadAdminCredentials();
-  return {
-    "X-Solar-Role": "admin",
-    "X-Solar-Login": creds.login || session.login || "admin",
-    "X-Solar-Password": creds.password || "",
-  };
+export async function adminSupplyHeaders() {
+  const user = await ensureFirebaseAuth();
+  return { Authorization: `Bearer ${await user.getIdToken()}` };
 }
 
 const NETWORK_MSG =
@@ -178,7 +173,7 @@ export function sanitizePublicCatalog(data) {
 }
 
 export async function calculateSupplyOnServer(input, { includePrices = false, session } = {}) {
-  const headers = includePrices ? adminSupplyHeaders(session) : {};
+  const headers = includePrices ? await adminSupplyHeaders(session) : {};
   try {
     return await api.post(
       "/api/supply/calculate",
@@ -194,30 +189,30 @@ export async function calculateSupplyOnServer(input, { includePrices = false, se
 }
 
 export async function reloadSupplyCatalog(session) {
-  return api.post("/api/supply/reload", {}, { headers: adminSupplyHeaders(session) });
+  return api.post("/api/supply/reload", {}, { headers: await adminSupplyHeaders(session) });
 }
 
 /** Admin: narxlar bilan to‘liq katalog */
 export async function fetchAdminSupplyCatalog(session) {
   return api.get("/api/supply/catalog/admin", {
-    headers: adminSupplyHeaders(session),
+    headers: await adminSupplyHeaders(session),
   });
 }
 
 export async function createAdminSupplyProduct(session, body) {
   return api.post("/api/supply/products", body, {
-    headers: adminSupplyHeaders(session),
+    headers: await adminSupplyHeaders(session),
   });
 }
 
 export async function updateAdminSupplyProduct(session, id, body) {
   return api.put(`/api/supply/products/${encodeURIComponent(id)}`, body, {
-    headers: adminSupplyHeaders(session),
+    headers: await adminSupplyHeaders(session),
   });
 }
 
 export async function deleteAdminSupplyProduct(session, id) {
   return api.delete(`/api/supply/products/${encodeURIComponent(id)}`, {
-    headers: adminSupplyHeaders(session),
+    headers: await adminSupplyHeaders(session),
   });
 }

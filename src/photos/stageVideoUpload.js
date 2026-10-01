@@ -31,7 +31,7 @@ export async function uploadStageVideoFile(file, { projectId, stageId, ustaId })
   form.append("stageId", String(stageId || ""));
   form.append("ustaId", String(ustaId || ""));
 
-  const data = await api.postFormData("/api/db/upload/stage-video", form);
+  const data = await api.postFormData("/api/upload/stage-video", form);
   return {
     videoUrl: data.videoUrl,
     storagePath: data.storagePath,

@@ -1,4 +1,5 @@
 import express from "express";
+import { createServerTokenIssuer } from "./server/firebaseAdminAuth.js";
 import dotenv from "dotenv";
 import axios from "axios";
 import multer from "multer";
@@ -18,7 +19,14 @@ import { logTelegramEventServer, upsertTelegramEventServer } from "./server/tele
 import { logTelegramAttendanceSend } from "./server/telegramAttendanceLog.js";
 import { startTelegramInboundPoller, stopTelegramInboundPoller } from "./server/telegramInboundPoller.js";
 import { saveWorkLogPhotoToDb } from "./server/workLogPhotoStore.js";
-import { createDbRouter, handleSqlLogin } from "./server/routes/dbApi.js";
+import { createDbRouter } from "./server/routes/dbApi.js";
+import { recordConfirmedStage } from "./server/confirmedStage.js";
+import { createPrivateStorageRouter } from './server/routes/privateStorageApi.js';
+import { requireOperationScope } from "./server/operationAuthorization.js";
+import { createPrivateMediaRouter, createPrivateUploadRouter, readPrivateMedia } from "./server/routes/privateMediaApi.js";
+import { requireFirebaseSession } from "./server/authMiddleware.js";
+import { createStaffRouter } from "./server/routes/staffApi.js";
+import { createAuthRouter } from "./server/routes/authApi.js";
 import { createReportsRouter } from "./server/routes/reportsApi.js";
 import { createSupplyRouter } from "./server/routes/supplyApi.js";
 import { isSupplyDbAvailable, loadInternalCatalog } from "./server/supply/catalogStore.js";
@@ -39,6 +47,8 @@ const distDir = path.join(__dirname, "dist");
 dotenv.config();
 
 const app = express();
+// Internal issuer factory; login endpoints must verify server accounts before signing.
+app.locals.createServerTokenIssuer = createServerTokenIssuer;
 const PORT = Number(process.env.PORT) || 5000;
 
 const workers = [];
@@ -67,7 +77,6 @@ function isAllowedCorsOrigin(origin) {
   if (CORS_ALLOW.has(origin)) return true;
   if (/^capacitor:\/\//i.test(origin)) return true;
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return true;
-  if (/^https?:\/\/77\.237\.237\.94(:\d+)?$/i.test(origin)) return true;
   const extra = String(process.env.CORS_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
@@ -86,16 +95,14 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Solar-Role, X-Solar-Login, X-Solar-Password, X-Supply-Admin-Token",
+    "Content-Type, Authorization",
   );
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
   }
   next();
 });
-app.use(express.json({ limit: "80mb" }));
-app.use(express.urlencoded({ extended: true, limit: "80mb" }));
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 const UPLOADS_DIR = path.join(__dirname, "data", "uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -125,6 +132,28 @@ app.use((req, _res, next) => {
   next();
 });
 
+// Authenticate private requests before parsing large JSON/native upload payloads.
+app.use('/api', (req,res,next) => {
+  const login = req.method === 'POST' && ['/auth/login','/login'].includes(req.path);
+  if(login){
+    if(!req.is('application/json'))return res.status(400).json({ok:false,error:'Kirish amalga oshmadi'});
+    return express.json({limit:'16kb'})(req,res,next);
+  }
+  return requireFirebaseSession()(req,res,next);
+});
+app.use(express.json({limit:'80mb'}));
+app.use(express.urlencoded({extended:true,limit:'80mb'}));
+
+function privateActionLimit(max) {
+ const windows=new Map();
+ return (req,res,next)=>{
+  const now=Date.now(),id=req.authClaims.uid;
+  for(const [key,value]of windows)if(value.until<=now)windows.delete(key);
+  const bucket=windows.get(id)||{until:now+60000,count:0};windows.set(id,bucket);
+  if(++bucket.count>max)return res.status(429).json({ok:false,error:'Keyinroq qayta urining'});
+  next();
+ };
+}
 function attachJsonUploadedFile(fieldName = "image") {
   return (req, _res, next) => {
     if (req.file?.buffer?.length) return next();
@@ -153,14 +182,29 @@ function attachJsonUploadedFile(fieldName = "image") {
 }
 
 void initDb().catch((err) => {
-  console.error("[db] init xatosi:", err?.message || err);
+  console.error("[db] init xatosi:", { code: err?.code || "SERVER_ERROR" });
 });
 
-app.use("/api/db", createDbRouter());
-app.use("/api/reports", createReportsRouter());
+// Side-effect/report routes must at least require a verified session.
+app.use('/api/telegram/monthly-report', requireFirebaseSession(['admin']));
+app.use('/api/telegram/daily-attendance-report', requireFirebaseSession(['admin']));
+app.use('/api/telegram', requireFirebaseSession(), privateActionLimit(60));
+app.use('/api/upload', requireFirebaseSession(), privateActionLimit(20));
+app.use('/api/upload', createPrivateUploadRouter({ directory: UPLOADS_DIR }));
+app.use('/api/private-storage', createPrivateStorageRouter());
+app.use('/api/master', requireFirebaseSession(['admin','usta']));
+app.use('/api/geo', requireFirebaseSession(), privateActionLimit(60));
+app.use('/api/workers', requireFirebaseSession(['admin']), (_req,res) => res.status(403).json({ok:false,error:'Use the protected staff API.'}));
+app.use("/api/staff", createStaffRouter());
+// Generic sync/import/SQL CRUD is admin-only; scoped business APIs remain separate.
+app.use("/api/db", requireFirebaseSession(['admin']), createDbRouter());
+for (const endpoint of ['/api/workers','/api/projects','/api/brigades','/api/expenses','/api/work_logs']) {
+  app.use(endpoint, requireFirebaseSession(['admin']));
+}
+app.use("/api/reports", requireFirebaseSession(["admin"]), createReportsRouter());
 app.use("/api/supply", createSupplyRouter());
 console.log("[supply] router registered: /api/supply");
-app.use("/api/media", express.static(UPLOADS_DIR));
+app.use("/api/media", createPrivateMediaRouter({ directory: UPLOADS_DIR }));
 
 {
   const supplyPath = resolveSupplyDir();
@@ -175,7 +219,7 @@ app.use("/api/media", express.static(UPLOADS_DIR));
       console.log("[supply] files:");
       for (const n of names) console.log("[supply] -", n);
     } catch (err) {
-      console.warn("[supply] readdir fail:", err?.message || err);
+      console.warn("[supply] readdir fail:", { code: err?.code || "SERVER_ERROR" });
     }
   }
   if (isSupplyDbAvailable()) {
@@ -192,16 +236,16 @@ app.use("/api/media", express.static(UPLOADS_DIR));
         console.warn("[supply] catalog empty:", cat.error);
       }
     } catch (err) {
-      console.error("[supply] catalog load xatosi:", err?.message || err);
+      console.error("[supply] catalog load xatosi:", { code: err?.code || "SERVER_ERROR" });
     }
   } else {
-    console.warn("[supply-db] supply.db topilmadi / data/supply bo‘sh:", supplyPath);
+    console.warn("[supply-db] supply.db topilmadi / data/supply bo‘sh:", { code: supplyPath?.code || "SERVER_ERROR" });
   }
 }
 
 const TELEGRAM_EXPORT_DIR = path.join(__dirname, "data", "telegram-export", "ChatExport_2026-07-03");
 if (fs.existsSync(TELEGRAM_EXPORT_DIR)) {
-  app.use("/api/telegram-export", express.static(TELEGRAM_EXPORT_DIR));
+  app.use("/api/telegram-export", requireFirebaseSession(["admin"]), (_req,res,next) => {res.setHeader("Cache-Control","no-store");next();}, express.static(TELEGRAM_EXPORT_DIR,{dotfiles:"deny"}));
 }
 
 async function sendTelegramWorkMessage(text) {
@@ -324,17 +368,15 @@ function dataUrlToBuffer(dataUrl) {
   return Buffer.from(m[2], "base64");
 }
 
-async function imageToBuffer(imageValue) {
+async function imageToBuffer(imageValue, req) {
   const text = String(imageValue || "").trim();
   if (!text) return null;
   const dataBuffer = dataUrlToBuffer(text);
   if (dataBuffer) return dataBuffer;
-  if (/^https?:\/\//i.test(text)) {
-    const response = await fetch(text);
-    if (!response.ok) return null;
-    const arr = await response.arrayBuffer();
-    return Buffer.from(arr);
+  if (text.startsWith('private-storage:')) {
+    return readPrivateMedia(text, req.authSession, {directory:UPLOADS_DIR});
   }
+  if (text.startsWith('/api/media/')) return readPrivateMedia(text,req.authSession,{directory:UPLOADS_DIR});
   return null;
 }
 
@@ -448,7 +490,7 @@ app.get("/api/geo/reverse", async (req, res) => {
   }
 });
 
-app.post("/api/master/mark-login", (req, res) => {
+app.post("/api/master/mark-login", requireOperationScope(), (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const workerId = String(payload.workerId || "").trim();
@@ -460,15 +502,18 @@ app.post("/api/master/mark-login", (req, res) => {
     markMasterLogin(workerId, login, name);
     return res.status(200).json({ ok: true });
   } catch (error) {
-    console.error("POST /api/master/mark-login failed:", error);
+    console.error("POST /api/master/mark-login failed:", { code: error?.code || "SERVER_ERROR" });
     return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
-app.post("/api/login", (req, res) => handleSqlLogin(req, res));
+const authRouter = createAuthRouter();
+app.use("/api/auth", authRouter);
+// Preserve the old URL, with the same authenticated login implementation.
+app.use("/api", authRouter);
 
 /** Client dan kelgan bot yozuvini SQL + Firestore ga saqlash (Hisobot avtomatik yangilanadi). */
-app.post("/api/telegram/log-event", async (req, res) => {
+app.post("/api/telegram/log-event", requireOperationScope(), async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     if (!String(payload.eventType || "").trim()) {
@@ -477,12 +522,12 @@ app.post("/api/telegram/log-event", async (req, res) => {
     const saved = await upsertTelegramEventServer(payload);
     return res.json({ ok: true, id: saved.id });
   } catch (error) {
-    console.error("POST /api/telegram/log-event failed:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Xato" });
+    console.error("POST /api/telegram/log-event failed:", { code: error?.code || "SERVER_ERROR" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
-app.post("/api/telegram/work-log", async (req, res) => {
+app.post("/api/telegram/work-log", requireOperationScope(), async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const mode = String(payload.mode || "").trim(); // arrival | departure | day_off
@@ -538,7 +583,7 @@ app.post("/api/telegram/work-log", async (req, res) => {
     });
     return res.status(200).json({ ok: true });
   } catch (error) {
-    console.error("POST /api/telegram/work-log failed:", error);
+    console.error("POST /api/telegram/work-log failed:", { code: error?.code || "SERVER_ERROR" });
     try {
       const payload = req.body && typeof req.body === "object" ? req.body : {};
       void logTelegramAttendanceSend({
@@ -551,12 +596,12 @@ app.post("/api/telegram/work-log", async (req, res) => {
           telegramDateToDateKey(payload.date, new Date().toISOString()) ||
           tashkentTodayYMD(),
         success: false,
-        error: error?.message || "Telegram xatosi",
+        error: "Server xatosi",
       });
     } catch {
       /* ignore */
     }
-    return res.status(500).json({ ok: false, error: error.message || "Telegram xatosi" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
@@ -616,7 +661,7 @@ async function resolveWorkLocationForRequest(req, payload) {
           fromClient.longitude,
         );
       } catch (e) {
-        console.warn("Reverse geocode xato:", e?.message || e);
+        console.warn("Reverse geocode xato:", { code: e?.code || "SERVER_ERROR" });
       }
     }
     return fromClient;
@@ -626,7 +671,7 @@ async function resolveWorkLocationForRequest(req, payload) {
     const geo = await lookupIpGeo(ip);
     return normalizeWorkLocation(geo);
   } catch (e) {
-    console.warn("Server IP joylashuv olinmadi:", e?.message || e);
+    console.warn("Server IP joylashuv olinmadi:", { code: e?.code || "SERVER_ERROR" });
     return null;
   }
 }
@@ -656,7 +701,7 @@ async function sendWorkLocationToTelegram({ workLocation, workerName, mode }) {
     });
     return true;
   } catch (venueErr) {
-    console.error("sendVenue xato, sendLocation uriniladi:", venueErr?.message || venueErr);
+    console.error("sendVenue xato, sendLocation uriniladi:", { code: venueErr?.code || "SERVER_ERROR" });
   }
 
   try {
@@ -675,7 +720,7 @@ async function sendWorkLocationToTelegram({ workLocation, workerName, mode }) {
     const data = await res.json().catch(() => ({}));
     if (res.ok && data?.ok) return true;
   } catch (locErr) {
-    console.error("sendLocation ham xato:", locErr?.message || locErr);
+    console.error("sendLocation ham xato:", { code: locErr?.code || "SERVER_ERROR" });
   }
 
   try {
@@ -687,7 +732,7 @@ async function sendWorkLocationToTelegram({ workLocation, workerName, mode }) {
   }
 }
 
-app.post("/api/telegram/work-log-photo", upload.single("image"), attachJsonUploadedFile("image"), async (req, res) => {
+app.post("/api/telegram/work-log-photo", upload.single("image"), attachJsonUploadedFile("image"), requireOperationScope(), async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const mode = String(payload.mode || "").trim(); // arrival | departure
@@ -735,7 +780,7 @@ app.post("/api/telegram/work-log-photo", upload.single("image"), attachJsonUploa
         mimeType: req.file.mimetype || "image/jpeg",
       });
     } catch (photoErr) {
-      console.warn("work-log-photo DB saqlash:", photoErr?.message || photoErr);
+      console.warn("work-log-photo DB saqlash:", { code: photoErr?.code || "SERVER_ERROR" });
     }
 
     const venueSent = await sendWorkLocationToTelegram({
@@ -792,7 +837,7 @@ app.post("/api/telegram/work-log-photo", upload.single("image"), attachJsonUploa
       photoSaved: Boolean(savedPhoto),
     });
   } catch (error) {
-    console.error("POST /api/telegram/work-log-photo failed:", error);
+    console.error("POST /api/telegram/work-log-photo failed:", { code: error?.code || "SERVER_ERROR" });
     try {
       const payload = req.body && typeof req.body === "object" ? req.body : {};
       void logTelegramAttendanceSend({
@@ -805,16 +850,16 @@ app.post("/api/telegram/work-log-photo", upload.single("image"), attachJsonUploa
           telegramDateToDateKey(payload.date, new Date().toISOString()) ||
           tashkentTodayYMD(),
         success: false,
-        error: error?.message || "Telegram xatosi",
+        error: "Server xatosi",
       });
     } catch {
       /* ignore */
     }
-    return res.status(500).json({ ok: false, error: error.message || "Telegram xatosi" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
-app.post("/api/upload/process-image", upload.single("image"), attachJsonUploadedFile("image"), async (req, res) => {
+app.post("/api/upload/process-image", upload.single("image"), attachJsonUploadedFile("image"), requireOperationScope(), async (req, res) => {
   try {
     if (!req.file?.buffer?.length) {
       return res.status(400).json({ ok: false, error: "Rasm topilmadi" });
@@ -827,12 +872,12 @@ app.post("/api/upload/process-image", upload.single("image"), attachJsonUploaded
     const imageData = `data:${mime};base64,${req.file.buffer.toString("base64")}`;
     return res.status(200).json({ ok: true, imageData });
   } catch (error) {
-    console.error("POST /api/upload/process-image failed:", error);
+    console.error("POST /api/upload/process-image failed:", { code: error?.code || "SERVER_ERROR" });
     return res.status(500).json({ ok: false, error: "Rasmni qayta ishlab bo'lmadi" });
   }
 });
 
-app.post("/api/telegram/expense-log", async (req, res) => {
+app.post("/api/telegram/expense-log", requireOperationScope({project:true}), async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const workerName = String(payload.workerName || "Usta").trim() || "Usta";
@@ -877,12 +922,12 @@ app.post("/api/telegram/expense-log", async (req, res) => {
 
     return res.status(200).json({ ok: true });
   } catch (error) {
-    console.error("POST /api/telegram/expense-log failed:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Telegram xatosi" });
+    console.error("POST /api/telegram/expense-log failed:", { code: error?.code || "SERVER_ERROR" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
-app.post("/api/telegram/stage-photos", async (req, res) => {
+app.post("/api/telegram/stage-photos", requireOperationScope({project:true}), async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const workerName = String(payload.workerName || "Usta").trim() || "Usta";
@@ -921,7 +966,7 @@ app.post("/api/telegram/stage-photos", async (req, res) => {
     const headerLines = headerParts.join("\n");
 
     for (let i = 0; i < photos.length; i += 1) {
-      const buffer = await imageToBuffer(photos[i]);
+      const buffer = await imageToBuffer(photos[i], req);
       if (!buffer) {
         return res.status(400).json({ ok: false, error: `Rasm ${i + 1} noto'g'ri formatda` });
       }
@@ -940,9 +985,7 @@ app.post("/api/telegram/stage-photos", async (req, res) => {
     const videoUrl = String(payload.videoUrl || "").trim();
     if (videoUrl) {
       try {
-        const videoRes = await fetch(videoUrl);
-        if (!videoRes.ok) throw new Error("Video URL ochilmadi");
-        const videoBuf = Buffer.from(await videoRes.arrayBuffer());
+        const videoBuf = await readPrivateMedia(videoUrl, req.authSession, {directory:UPLOADS_DIR});
         const videoCaption =
           stageName === "Mijozga ishni topshirish"
             ? `🎬 ${stageName}\nMijoz bilan birga tushuntirilgan xolda video`
@@ -953,7 +996,7 @@ app.post("/api/telegram/stage-photos", async (req, res) => {
           fileName: String(payload.videoFileName || "stage-video.mp4"),
         });
       } catch (videoErr) {
-        console.error("Bosqich videosi yuborilmadi:", videoErr?.message || videoErr);
+        console.error("Bosqich videosi yuborilmadi:", { code: videoErr?.code || "SERVER_ERROR" });
       }
     }
 
@@ -969,14 +1012,15 @@ app.post("/api/telegram/stage-photos", async (req, res) => {
       meta: { projectName, stageName, brigadeName },
     });
 
+    await recordConfirmedStage(req);
     return res.status(200).json({ ok: true });
   } catch (error) {
-    console.error("POST /api/telegram/stage-photos failed:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Telegram xatosi" });
+    console.error("POST /api/telegram/stage-photos failed:", { code: error?.code || "SERVER_ERROR" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
-app.post("/api/telegram/yorijnoma", async (req, res) => {
+app.post("/api/telegram/yorijnoma", requireOperationScope(), async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const workerName = String(payload.workerName || payload.name || "Usta").trim() || "Usta";
@@ -1022,7 +1066,7 @@ app.post("/api/telegram/yorijnoma", async (req, res) => {
             fileName: `yorijnoma-imzo-${workerLogin || workerId || "usta"}.png`,
           });
         } catch (photoError) {
-          console.error("Yo'riqnoma imzo rasmi yuborilmadi, matn yuboriladi:", photoError?.message || photoError);
+          console.error("Yo'riqnoma imzo rasmi yuborilmadi, matn yuboriladi:", { code: photoError?.code || "SERVER_ERROR" });
           await sendTelegramWorkMessage(`${caption}\n(Imzo rasmi yuborilmadi)`);
         }
       } else {
@@ -1041,12 +1085,12 @@ app.post("/api/telegram/yorijnoma", async (req, res) => {
 
     return res.status(200).json({ ok: true });
   } catch (error) {
-    console.error("POST /api/telegram/yorijnoma failed:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Telegram xatosi" });
+    console.error("POST /api/telegram/yorijnoma failed:", { code: error?.code || "SERVER_ERROR" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
-app.post("/api/telegram/project-photos", async (req, res) => {
+app.post("/api/telegram/project-photos", requireOperationScope({project:true}), async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const workerName = String(payload.workerName || "Usta").trim() || "Usta";
@@ -1064,7 +1108,7 @@ app.post("/api/telegram/project-photos", async (req, res) => {
       const image = String(item.image || "").trim();
       const stageName = String(item.stageName || "Bosqich").trim() || "Bosqich";
       const slotNumber = Number(item.slotNumber || 0);
-      const buffer = await imageToBuffer(image);
+      const buffer = await imageToBuffer(image, req);
       if (!buffer) continue;
 
       const caption =
@@ -1089,8 +1133,8 @@ app.post("/api/telegram/project-photos", async (req, res) => {
 
     return res.status(200).json({ ok: true });
   } catch (error) {
-    console.error("POST /api/telegram/project-photos failed:", error);
-    return res.status(500).json({ ok: false, error: error.message || "Telegram xatosi" });
+    console.error("POST /api/telegram/project-photos failed:", { code: error?.code || "SERVER_ERROR" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
@@ -1098,7 +1142,7 @@ app.get("/api/workers", (_req, res) => {
   try {
     res.status(200).json(workers);
   } catch (error) {
-    console.error("GET /api/workers failed:", error);
+    console.error("GET /api/workers failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json([]);
   }
 });
@@ -1110,7 +1154,7 @@ app.post("/api/workers", (req, res) => {
     }
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error("POST /api/workers failed:", error);
+    console.error("POST /api/workers failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ success: false });
   }
 });
@@ -1119,7 +1163,7 @@ app.get("/api/projects", (_req, res) => {
   try {
     res.status(200).json(projects);
   } catch (error) {
-    console.error("GET /api/projects failed:", error);
+    console.error("GET /api/projects failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json([]);
   }
 });
@@ -1151,7 +1195,7 @@ app.post("/api/projects", (req, res) => {
     projects.unshift(item);
     res.status(201).json(item);
   } catch (error) {
-    console.error("POST /api/projects failed:", error);
+    console.error("POST /api/projects failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ success: false });
   }
 });
@@ -1160,7 +1204,7 @@ app.get("/api/brigades", (_req, res) => {
   try {
     res.status(200).json(brigades);
   } catch (error) {
-    console.error("GET /api/brigades failed:", error);
+    console.error("GET /api/brigades failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json([]);
   }
 });
@@ -1182,7 +1226,7 @@ app.post("/api/brigades", (req, res) => {
     brigades.unshift(item);
     res.status(201).json(item);
   } catch (error) {
-    console.error("POST /api/brigades failed:", error);
+    console.error("POST /api/brigades failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ success: false });
   }
 });
@@ -1203,7 +1247,7 @@ app.put("/api/brigades/:id", (req, res) => {
     };
     res.status(200).json(brigades[idx]);
   } catch (error) {
-    console.error("PUT /api/brigades/:id failed:", error);
+    console.error("PUT /api/brigades/:id failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ success: false });
   }
 });
@@ -1217,7 +1261,7 @@ app.delete("/api/brigades/:id", (req, res) => {
     brigades.splice(idx, 1);
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error("DELETE /api/brigades/:id failed:", error);
+    console.error("DELETE /api/brigades/:id failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ success: false });
   }
 });
@@ -1226,7 +1270,7 @@ app.get("/api/expenses", (_req, res) => {
   try {
     res.status(200).json(expenses);
   } catch (error) {
-    console.error("GET /api/expenses failed:", error);
+    console.error("GET /api/expenses failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json([]);
   }
 });
@@ -1261,7 +1305,7 @@ app.post("/api/expenses", (req, res) => {
     expenses.unshift(item);
     res.status(201).json(item);
   } catch (error) {
-    console.error("POST /api/expenses failed:", error);
+    console.error("POST /api/expenses failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ success: false });
   }
 });
@@ -1300,7 +1344,7 @@ app.put("/api/expenses/:id", (req, res) => {
     expenses[idx] = merged;
     res.status(200).json(merged);
   } catch (error) {
-    console.error("PUT /api/expenses/:id failed:", error);
+    console.error("PUT /api/expenses/:id failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ error: "Server xatosi" });
   }
 });
@@ -1315,7 +1359,7 @@ app.delete("/api/expenses/:id", (req, res) => {
     expenses.splice(idx, 1);
     res.status(200).json({ ok: true });
   } catch (error) {
-    console.error("DELETE /api/expenses/:id failed:", error);
+    console.error("DELETE /api/expenses/:id failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
@@ -1324,7 +1368,7 @@ app.get("/api/work_logs", (_req, res) => {
   try {
     res.status(200).json(workLogs);
   } catch (error) {
-    console.error("GET /api/work_logs failed:", error);
+    console.error("GET /api/work_logs failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json([]);
   }
 });
@@ -1340,20 +1384,13 @@ app.post("/api/work_logs", (req, res) => {
     workLogs.unshift(item);
     res.status(201).json(item);
   } catch (error) {
-    console.error("POST /api/work_logs failed:", error);
+    console.error("POST /api/work_logs failed:", { code: error?.code || "SERVER_ERROR" });
     res.status(500).json({ success: false });
   }
 });
 
 app.post("/api/telegram/monthly-report", async (req, res) => {
   try {
-    const secret = (process.env.TELEGRAM_MONTHLY_REPORT_SECRET || "").trim();
-    if (secret) {
-      const h = String(req.headers["x-monthly-report-secret"] || "").trim();
-      if (h !== secret) {
-        return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
-      }
-    }
     const token = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
     const groupId = (process.env.TELEGRAM_GROUP_ID || "").trim();
     if (!token || !groupId) {
@@ -1387,29 +1424,14 @@ app.post("/api/telegram/monthly-report", async (req, res) => {
     }
     return res.status(200).json({ ok: true, files: docs.length });
   } catch (error) {
-    console.error("POST /api/telegram/monthly-report failed:", error);
-    return res.status(500).json({ ok: false, error: error?.message || "Server xatosi" });
+    console.error("POST /api/telegram/monthly-report failed:", { code: error?.code || "SERVER_ERROR" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
 /** Kunlik attendance yakuni — Telegram (cron bilan bir generator). */
 app.post("/api/telegram/daily-attendance-report", async (req, res) => {
   try {
-    const secret = (
-      process.env.TELEGRAM_DAILY_ATTENDANCE_SECRET ||
-      process.env.TELEGRAM_MONTHLY_REPORT_SECRET ||
-      ""
-    ).trim();
-    if (secret) {
-      const h = String(
-        req.headers["x-daily-attendance-secret"] ||
-          req.headers["x-monthly-report-secret"] ||
-          "",
-      ).trim();
-      if (h !== secret) {
-        return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
-      }
-    }
     const body = req.body && typeof req.body === "object" ? req.body : {};
     const dateKey = String(body.date || body.dateKey || tashkentTodayYMD()).trim();
     const force = body.force === true || body.force === "1";
@@ -1423,8 +1445,8 @@ app.post("/api/telegram/daily-attendance-report", async (req, res) => {
     }
     return res.status(200).json(result);
   } catch (error) {
-    console.error("POST /api/telegram/daily-attendance-report failed:", error);
-    return res.status(500).json({ ok: false, error: error?.message || "Server xatosi" });
+    console.error("POST /api/telegram/daily-attendance-report failed:", { code: error?.code || "SERVER_ERROR" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
@@ -1434,8 +1456,8 @@ app.get("/api/telegram/daily-attendance-report", async (req, res) => {
     const report = await buildDailyAttendanceReportForDate(dateKey);
     return res.json({ ok: true, dateKey, report });
   } catch (error) {
-    console.error("GET /api/telegram/daily-attendance-report failed:", error);
-    return res.status(500).json({ ok: false, error: error?.message || "Server xatosi" });
+    console.error("GET /api/telegram/daily-attendance-report failed:", { code: error?.code || "SERVER_ERROR" });
+    return res.status(500).json({ ok: false, error: "Server xatosi" });
   }
 });
 
@@ -1474,22 +1496,22 @@ app.use((error, _req, res, _next) => {
 });
 
 process.on("uncaughtException", (error) => {
-  console.error("Uncaught exception:", error);
+  console.error("Uncaught exception:", { code: error?.code || "SERVER_ERROR" });
 });
 
 process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled rejection:", reason);
+  console.error("Unhandled rejection:", { code: reason?.code || "SERVER_ERROR" });
 });
 
 let server = null;
 
-export function startServer({ port = PORT, host = "0.0.0.0" } = {}) {
+export function startServer({ port = PORT, host = process.env.BIND_HOST || "0.0.0.0" } = {}) {
   if (server) return server;
   server = app.listen(Number(port) || PORT, host, () => {
     const p = Number(port) || PORT;
     console.log(`[server] PORT=${p}`);
     console.log(`Server running on port ${p}`);
-    startBot({
+    if (process.env.SOLARERP_DISABLE_BACKGROUND_TASKS !== "true") startBot({
       ...config,
       getMonthlyDataset: async () => {
         await initDb();
@@ -1513,7 +1535,7 @@ export function startServer({ port = PORT, host = "0.0.0.0" } = {}) {
     const inboundEnabled =
       String(process.env.TELEGRAM_INBOUND_POLL || "")
         .toLowerCase() === "true";
-    if (inboundEnabled) {
+    if (inboundEnabled && process.env.SOLARERP_DISABLE_BACKGROUND_TASKS !== "true") {
       startTelegramInboundPoller({ token: config.token });
     } else {
       console.log("[telegram-inbound] polling o‘chiq (TELEGRAM_INBOUND_POLL!=true)");
@@ -1530,7 +1552,7 @@ export function stopServer() {
     server.close();
     server = null;
   } catch (error) {
-    console.error("Stop server failed:", error);
+    console.error("Stop server failed:", { code: error?.code || "SERVER_ERROR" });
   }
 }
 
@@ -1539,7 +1561,7 @@ function shutdown() {
     stopServer();
     process.exit(0);
   } catch (error) {
-    console.error("Shutdown failed:", error);
+    console.error("Shutdown failed:", { code: error?.code || "SERVER_ERROR" });
     process.exit(1);
   }
 }

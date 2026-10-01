@@ -8,6 +8,7 @@ import {
 import {
   deleteCollectionDoc,
   listCollection,
+  subscribeCollection,
   updateCollectionDoc,
 } from "../firebase/firestoreCrud";
 import { canUseLocalFallback } from "../api/localFallback";
@@ -68,6 +69,12 @@ export function useUserActivityLogs() {
       window.removeEventListener(USER_ACTIVITY_LOGS_EVENT, sync);
     };
   }, []);
+
+  useEffect(() => subscribeCollection("user_activity_logs", (list) => {
+    const next = list.map(normalizeLogShape);
+    setLogs(next);
+    mergePersistLocal(next);
+  }, (error) => console.error("Activity live sync error:", error)), []);
 
   const deleteLog = useCallback(async (id) => {
     const sid = String(id || "").trim();

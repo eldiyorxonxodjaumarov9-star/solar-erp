@@ -21,9 +21,11 @@ export function parseSalaryNumber(value) {
   return Math.max(0, Math.round(n));
 }
 
-/** dailySalary = Math.round(salary / 30) */
-export function calcDailySalary(salary) {
-  return Math.round(parseSalaryNumber(salary) / 30);
+/** Kunlik haq = oylik summa / ish kunlari soni. */
+export function calcDailySalary(salary, workingDays = 30) {
+  const days = Number(workingDays);
+  if (!Number.isInteger(days) || days <= 0) return 0;
+  return parseSalaryNumber(salary) / days;
 }
 
 /**

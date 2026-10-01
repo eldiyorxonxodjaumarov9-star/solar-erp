@@ -32,7 +32,7 @@ export function loadAssistants() {
         fullName: String(a.fullName || a.name || "").trim(),
         phone: String(a.phone || "").trim(),
         login: String(a.login || "").trim(),
-        password: String(a.password || "").trim(),
+        password: "",
         createdAt:
           typeof a.createdAt === "string" && a.createdAt
             ? a.createdAt
@@ -46,7 +46,7 @@ export function loadAssistants() {
 
 /** @param {Assistant[]} list */
 export function persistAssistants(list) {
-  localStorage.setItem(ASSISTANTS_STORAGE_KEY, JSON.stringify(list));
+  localStorage.setItem(ASSISTANTS_STORAGE_KEY, JSON.stringify(list.map(({ password, pin, credential, credentials, adminPassword, passwordHash, ...profile }) => profile)));
   window.dispatchEvent(new CustomEvent(ASSISTANTS_CHANGED_EVENT));
 }
 

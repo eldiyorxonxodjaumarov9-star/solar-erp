@@ -52,9 +52,9 @@ function AssistantFormModal({ mode, initial, allAssistants, excludeId, onClose, 
 
     let finalPassword = pw;
     if (mode === "edit" && initial && !pw) {
-      finalPassword = initial.password;
+      finalPassword = undefined;
     }
-    if (!finalPassword) {
+    if (mode !== "edit" && !finalPassword) {
       setError("Parol majburiy.");
       return;
     }

@@ -5,6 +5,7 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { desktopPublicEnv } from './desktop-public-env.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dataDir = join(root, "data");
@@ -27,27 +28,16 @@ function killPackagedAppLocks() {
 killPackagedAppLocks();
 
 function writeDesktopEnv() {
-  const lines = existsSync(envSrc)
-    ? readFileSync(envSrc, "utf8").split(/\r?\n/)
-    : ["# SolarERP desktop"];
-  const filtered = lines.filter((line) => {
-    const key = line.trim().split("=")[0]?.trim();
-    return key !== "PORT" && key !== "SERVE_STATIC";
-  });
-  filtered.push("PORT=5150", "SERVE_STATIC=true");
-  writeFileSync(envDst, `${filtered.join("\n").trim()}\n`, "utf8");
+  const productionEnv=join(root,'.env.production');
+  const source=readFileSync(envSrc,'utf8')+'\n'+(existsSync(productionEnv)?readFileSync(productionEnv,'utf8'):'');
+  writeFileSync(envDst,desktopPublicEnv(source),'utf8');
 }
 
 if (existsSync(envSrc)) {
   writeDesktopEnv();
   console.log("[desktop] .env → desktop-build.env (PORT=5150)");
 } else {
-  writeFileSync(
-    envDst,
-    "# SolarERP desktop — .env mavjud emas edi\nPORT=5150\nSERVE_STATIC=true\n",
-    "utf8",
-  );
-  console.warn("[desktop] .env topilmadi — minimal desktop-build.env yaratildi");
+  throw new Error('Desktop release public HTTPS config missing; server credentials must not be packaged.');
 }
 
 console.log("[desktop] better-sqlite3 — Electron uchun qayta yig‘ilmoqda…");

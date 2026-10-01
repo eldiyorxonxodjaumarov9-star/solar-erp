@@ -1,5 +1,6 @@
+import { requireFirebaseSession } from "../authMiddleware.js";
 import { Router } from "express";
-import { isAdminRequest, requireAdmin } from "../supply/adminAuth.js";
+import { attachSupplyIdentity, isAdminRequest, requireAdmin } from "../supply/adminAuth.js";
 import {
   getInternalCatalog,
   invalidateSupplyCatalogCache,
@@ -63,8 +64,10 @@ function reportToHistoryPayload(report, extra = {}) {
   };
 }
 
-export function createSupplyRouter() {
+export function createSupplyRouter({ authorize = requireFirebaseSession, historyStore = { list: listHistory, save: saveHistory, remove: deleteHistory } } = {}) {
   const router = Router();
+  router.use(authorize(["admin","asisten"]));
+  router.use(attachSupplyIdentity);
 
   router.get("/health", (_req, res) => {
     const internal = getInternalCatalog();
@@ -177,7 +180,7 @@ export function createSupplyRouter() {
 
     if (!report.ok) return res.status(400).json(report);
 
-    const adminView = isAdminRequest(req) || Boolean(body.includePrices);
+    const adminView = isAdminRequest(req);
     return res.json({
       ok: true,
       quote: report,
@@ -188,9 +191,9 @@ export function createSupplyRouter() {
     });
   });
 
-  router.get("/history", (_req, res) => {
+  router.get("/history", (req, res) => {
     try {
-      return res.json({ ok: true, items: listHistory() });
+      return res.json({ ok: true, items: historyStore.list().filter(item => req.authSession.role === "admin" || item.createdByUid === req.authClaims.uid) });
     } catch (err) {
       console.error("[supply] history list error:", err?.message || err);
       return res.status(500).json({ ok: false, error: "Tarix o‘qilmadi", items: [] });
@@ -200,6 +203,10 @@ export function createSupplyRouter() {
   router.post("/save", (req, res) => {
     try {
       const body = req.body || {};
+      if (body.id && req.authSession.role !== 'admin') {
+        const previous = historyStore.list().find(item => item.id === body.id);
+        if (previous && previous.createdByUid !== req.authClaims.uid) return res.status(403).json({ok:false});
+      }
       const report = body.report || body.quote || null;
       let payload;
       if (report?.panel || report?.systemKw != null) {
@@ -219,7 +226,9 @@ export function createSupplyRouter() {
       if (!payload.telegramText && payload.totalUsd == null && payload.systemKw == null && payload.requestedSystemKw == null) {
         return res.status(400).json({ ok: false, error: "Saqlash uchun hisob kerak" });
       }
-      const saved = saveHistory(payload, body.id || payload.id);
+      delete payload.id;
+      payload.createdByUid=req.authClaims.uid;payload.createdBy=req.authSession.login;
+      const saved = historyStore.save(payload, body.id);
       return res.json({ ok: true, item: saved, id: saved.id });
     } catch (err) {
       console.error("[supply] save error:", err?.message || err);
@@ -229,7 +238,9 @@ export function createSupplyRouter() {
 
   router.delete("/history/:id", (req, res) => {
     try {
-      const result = deleteHistory(req.params.id);
+      const previous=historyStore.list().find(item => item.id===req.params.id);
+      if(req.authSession.role!=='admin' && (!previous || previous.createdByUid!==req.authClaims.uid))return res.status(403).json({ok:false});
+      const result = historyStore.remove(req.params.id);
       return res.json(result);
     } catch (err) {
       console.error("[supply] delete error:", err?.message || err);

@@ -18,7 +18,7 @@ export default function AppModalBackdrop({
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] transition-opacity"
         onClick={onClose}
       />
-      <div className={`relative z-[101] w-full ${panelMaxWidthClass}`}>
+      <div className={`relative z-[101] w-full max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-24px)] overflow-y-auto pb-[env(safe-area-inset-bottom,0px)] ${panelMaxWidthClass}`}>
         {children}
       </div>
     </div>

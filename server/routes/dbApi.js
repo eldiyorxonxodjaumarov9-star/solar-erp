@@ -8,8 +8,6 @@ import {
   addDocumentWithId,
   countWhere,
   deleteDocument,
-  findAssistantByLogin,
-  findWorkerByLogin,
   getDocument,
   importCollection,
   incrementWorkerPoints,
@@ -19,12 +17,6 @@ import {
   syncCollectionsMerge,
   updateDocument,
 } from "../db/store.js";
-import { markMasterLogin } from "../masterDailyUploads.js";
-import {
-  fetchReminderFirestoreData,
-  isFirebaseServerConfigured,
-} from "../firebaseServer.js";
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS_DIR = path.join(__dirname, "..", "..", "data", "uploads");
 const upload = multer({
@@ -43,6 +35,15 @@ const upload = multer({
 
 export function createDbRouter() {
   const router = express.Router();
+  // Raw account and credential CRUD is never a browser API, even for admin.
+  router.use((req, res, next) => {
+    const parts = req.path.split('/').filter(Boolean);
+    const restricted = new Set(['workers', 'users', 'assistants', 'accountCredentials']);
+    if (parts[0] === 'sync-all' || parts.some(part => restricted.has(part))) {
+      return res.status(403).json({ ok: false, error: 'Use the protected staff API.' });
+    }
+    next();
+  });
 
   router.post("/upload/stage-video", upload.single("video"), (req, res) => {
     try {
@@ -222,101 +223,4 @@ export function createDbRouter() {
   });
 
   return router;
-}
-
-async function findWorkerLogin(loginLower) {
-  const worker = await findWorkerByLogin(loginLower);
-  if (worker) return worker;
-  if (!isFirebaseServerConfigured()) return null;
-  try {
-    const { workers } = await fetchReminderFirestoreData({ bypassCache: true });
-    return (
-      workers.find(
-        (w) => String(w?.login || "").trim().toLowerCase() === loginLower,
-      ) || null
-    );
-  } catch {
-    return null;
-  }
-}
-
-async function findAssistantLogin(loginLower) {
-  const assistant = await findAssistantByLogin(loginLower);
-  if (assistant) return assistant;
-  if (!isFirebaseServerConfigured()) return null;
-  try {
-    const { initializeApp, getApps } = await import("firebase/app");
-    const { getAuth, signInAnonymously } = await import("firebase/auth");
-    const { collection, getDocs, getFirestore, query } = await import(
-      "firebase/firestore"
-    );
-    const { resolveFirebaseConfigFromEnv } = await import(
-      "../../shared/firebasePublicConfig.js"
-    );
-    const cfg = resolveFirebaseConfigFromEnv(process.env);
-    const app = getApps().length ? getApps()[0] : initializeApp(cfg);
-    const auth = getAuth(app);
-    if (!auth.currentUser) await signInAnonymously(auth);
-    const db = getFirestore(app);
-    const snap = await getDocs(query(collection(db, "assistants")));
-    const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
-    return (
-      list.find(
-        (a) => String(a?.login || "").trim().toLowerCase() === loginLower,
-      ) || null
-    );
-  } catch {
-    return null;
-  }
-}
-
-export async function handleSqlLogin(req, res) {
-  try {
-    const payload = req.body && typeof req.body === "object" ? req.body : {};
-    const role = String(payload.role || "").trim().toLowerCase();
-    const loginLower = String(payload.login || "").trim().toLowerCase();
-    const password = String(payload.password || "");
-
-    if (!loginLower || !password) {
-      return res.status(400).json({ ok: false, error: "Login va parol kerak" });
-    }
-
-    if (role === "usta" || role === "master") {
-      const worker = await findWorkerLogin(loginLower);
-      if (!worker || String(worker.password || "") !== password) {
-        return res.status(401).json({ ok: false, error: "Login yoki parol noto'g'ri." });
-      }
-      const session = {
-        role: "usta",
-        login: String(worker.login || "").trim() || loginLower,
-        name:
-          String(worker.fullName || "").trim() ||
-          String(worker.name || "").trim() ||
-          "Usta",
-        workerId: worker.id,
-      };
-      markMasterLogin(session.workerId, session.login, session.name);
-      return res.json({ ok: true, session });
-    }
-
-    if (role === "asisten") {
-      const assistant = await findAssistantLogin(loginLower);
-      if (!assistant || String(assistant.password || "") !== password) {
-        return res.status(401).json({ ok: false, error: "Login yoki parol noto'g'ri." });
-      }
-      const session = {
-        role: "asisten",
-        login: String(assistant.login || "").trim() || loginLower,
-        name: String(assistant.fullName || "").trim() || "Asisten",
-        assistantId: assistant.id,
-        masterName: "Administrator",
-      };
-      return res.json({ ok: true, session });
-    }
-
-    return res.status(400).json({ ok: false, error: "Noto'g'ri role" });
-  } catch (error) {
-    console.error("SQL login error:", error);
-    return res.status(500).json({ ok: false, error: "Server xatosi" });
-  }
 }

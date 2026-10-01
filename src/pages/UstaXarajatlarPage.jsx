@@ -241,6 +241,7 @@ export default function UstaXarajatlarPage() {
           workerId: ustaId,
           workerLogin: session?.login || "",
           workerName: newExpense.ustaName,
+          projectId: newExpense.projectId,
           projectName: newExpense.projectName,
           amount: newExpense.amount,
           type: newExpense.type,
@@ -274,7 +275,8 @@ export default function UstaXarajatlarPage() {
               workerId: ustaId,
               workerLogin: session?.login || "",
               workerName: newExpense.ustaName,
-              projectName: newExpense.projectName,
+              projectId: newExpense.projectId,
+          projectName: newExpense.projectName,
               amount: newExpense.amount,
               type: newExpense.type,
               date: newExpense.date,
@@ -306,6 +308,7 @@ export default function UstaXarajatlarPage() {
           ustaId,
           ustaName: newExpense.ustaName,
           actionType: "expense",
+          projectId: newExpense.projectId,
           projectName: newExpense.projectName,
         });
         closeModal();

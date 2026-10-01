@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/http";
 import {
   addCollectionDoc,
+  createCollectionDocOnce,
   deleteCollectionDoc,
   listCollection,
   subscribeCollection,
@@ -9,27 +10,10 @@ import {
 } from "../firebase/firestoreCrud";
 import {
   EXPENSES_CHANGED_EVENT,
-  loadExpenses,
   persistExpenses,
+  preparePayrollExpense,
 } from "../expenses/expenseStorage";
 import { canUseLocalFallback } from "../api/localFallback";
-
-function mergeCloudWithLocal(cloudList, localList) {
-  const cloud = Array.isArray(cloudList) ? cloudList : [];
-  const local = Array.isArray(localList) ? localList : [];
-  const byId = new Map();
-  for (const item of cloud) {
-    if (item?.id) byId.set(String(item.id), item);
-  }
-  for (const item of local) {
-    if (!item?.id) continue;
-    const id = String(item.id);
-    if (!byId.has(id)) byId.set(id, item);
-  }
-  return [...byId.values()].sort(
-    (a, b) => String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")),
-  );
-}
 
 function normalizeExpenseList(list) {
   return (Array.isArray(list) ? list : [])
@@ -47,35 +31,15 @@ function normalizeExpenseList(list) {
 }
 
 export function useExpenses() {
-  const [expenses, setExpenses] = useState(() => loadExpenses());
+  const [expenses, setExpenses] = useState([]);
 
   const refresh = useCallback(async () => {
-    let cloudList = [];
-    let apiList = [];
     try {
-      const list = await listCollection("expenses");
-      cloudList = normalizeExpenseList(list);
+      const next = normalizeExpenseList(await listCollection('expenses'));
+      setExpenses(next); persistExpenses(next);
     } catch (error) {
-      console.error("Expenses fetch error:", error);
-    }
-
-    try {
-      const list = await api.get("/api/expenses");
-      apiList = normalizeExpenseList(list);
-    } catch (error) {
-      console.error("Expenses API fetch error:", error);
-    }
-
-    const localList = loadExpenses();
-    const next = mergeCloudWithLocal(
-      mergeCloudWithLocal(cloudList, apiList),
-      localList,
-    );
-    setExpenses(next);
-    persistExpenses(next);
-
-    if (!next.length && localList.length) {
-      setExpenses(localList);
+      setExpenses([]);
+      console.error('Expenses read failed:', error);
     }
   }, []);
 
@@ -87,11 +51,12 @@ export function useExpenses() {
     const unsubscribe = subscribeCollection(
       "expenses",
       (list) => {
-        const next = mergeCloudWithLocal(list, loadExpenses());
+        const next = normalizeExpenseList(list);
         setExpenses(next);
         persistExpenses(next);
       },
       (error) => {
+        setExpenses([]);
         console.error("Expenses live sync error:", error);
       },
     );
@@ -101,7 +66,7 @@ export function useExpenses() {
   }, []);
 
   useEffect(() => {
-    const syncFromLocal = () => setExpenses(loadExpenses());
+    const syncFromLocal = () => { void refresh(); };
     const syncFromCloud = () => {
       void refresh();
     };
@@ -153,6 +118,18 @@ export function useExpenses() {
       alert(`Xarajat qo‘shishda xatolik: ${err?.message || "Noma'lum xato"}`);
       return undefined;
     }
+  };
+
+  const addPayrollPayment = async (input, session) => {
+    const { id, ...payload } = preparePayrollExpense(input, session);
+    // No REST/local fallback: uncertain writes must retry the same Firestore ID.
+    const created = await createCollectionDocOnce("expenses", id, payload);
+    setExpenses((prev) => {
+      const next = [created, ...prev.filter((expense) => expense.id !== id)];
+      persistExpenses(next);
+      return next;
+    });
+    return created;
   };
 
   const updateExpense = async (id, data) => {
@@ -225,6 +202,7 @@ export function useExpenses() {
     expenses,
     refresh,
     addExpense,
+    addPayrollPayment,
     updateExpense,
     deleteExpense,
   };

@@ -2,16 +2,18 @@ import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { homePathForRole } from "../auth/roleHome";
+import { apiConfigurationError } from "../api/http";
 
 const INPUT_CLASS =
   "mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none ring-slate-900/[0.04] transition-all placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-400/25";
 
 export default function LoginPage() {
-  const { session, loginAdmin, loginUsta, loginAsisten } = useAuth();
+  const { session, authLoading, loginAdmin, loginUsta, loginAsisten } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState("admin");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -26,15 +28,19 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (busy) return;
+    setBusy(true);
     setError("");
     let res;
     if (tab === "admin") {
-      res = loginAdmin(login, password);
+      res = await loginAdmin(login, password);
     } else if (tab === "asisten") {
       res = await loginAsisten(login, password);
     } else {
       res = await loginUsta(login, password);
     }
+    setBusy(false);
+    setPassword("");
     if (res.ok) {
       const nextPath =
         tab === "admin" ? "/" : tab === "asisten" ? "/asisten-panel" : "/usta-panel";
@@ -100,16 +106,17 @@ export default function LoginPage() {
                 className={INPUT_CLASS}
               />
             </div>
-            {error ? (
+            {error || apiConfigurationError ? (
               <p className="text-sm font-medium text-red-600" role="alert">
-                {error}
+                {error || apiConfigurationError}
               </p>
             ) : null}
             <button
               type="submit"
+              disabled={busy || authLoading || !!apiConfigurationError}
               className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-soft-md transition-all hover:bg-slate-800 active:scale-[0.98]"
             >
-              Kirish
+              {busy || authLoading ? "Tekshirilmoqda..." : "Kirish"}
             </button>
           </form>
 

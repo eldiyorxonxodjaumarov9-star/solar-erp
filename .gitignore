@@ -71,3 +71,7 @@ coverage/
 data/telegram-export/
 data/telegram-*.json
 
+
+# Local security test/browser/emulator artifacts
+.security-artifacts/
+release-artifacts/

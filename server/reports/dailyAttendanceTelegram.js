@@ -144,7 +144,7 @@ export async function generateAndSendDailyAttendanceReport(opts = {}) {
     status = "sent";
     markSentId(dedupeId);
   } catch (e) {
-    sendError = String(e?.message || e);
+    sendError = "TELEGRAM_SEND_FAILED";
     status = "send_failed";
     console.error("[daily-attendance] Telegram:", sendError);
   }
@@ -171,14 +171,14 @@ export async function generateAndSendDailyAttendanceReport(opts = {}) {
   try {
     await upsertFirestoreDocument(DAILY_ATTENDANCE_REPORTS, dateKey, record);
   } catch (e) {
-    console.warn("[dailyAttendanceReports] Firestore:", e?.message || e);
+    console.warn("[dailyAttendanceReports] Firestore write failed");
   }
 
   try {
     const { addDocumentWithId } = await import("../db/store.js");
     await addDocumentWithId(DAILY_ATTENDANCE_REPORTS, dateKey, record);
   } catch (e) {
-    console.warn("[dailyAttendanceReports] SQL:", e?.message || e);
+    console.warn("[dailyAttendanceReports] SQL write failed");
   }
 
   if (status !== "sent") {

@@ -1,3 +1,4 @@
+import PrivateMedia from "../components/PrivateMedia.jsx";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import PhotoThumbCard from "../components/PhotoThumbCard";

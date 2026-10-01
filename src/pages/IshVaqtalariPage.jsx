@@ -5,6 +5,9 @@ import { workLogDateKeyMatches } from "../activity/workLogFilters";
 import AppModalBackdrop from "../components/AppModalBackdrop";
 import WorkLocationDisplay from "../components/WorkLocationDisplay";
 import { useUserActivityLogs } from "../hooks/useUserActivityLogs";
+import { useWorkers } from "../hooks/useWorkers";
+import { attendanceDate, calculateAttendanceSalary } from "../workers/attendanceSalary";
+import { formatCurrency } from "../workers/salaryUtils";
 import { useUstaPhotos } from "../hooks/useUstaPhotos";
 import {
   APP_PHOTO_TYPES,
@@ -114,6 +117,7 @@ function brigadeOrMasterLabel(log) {
 
 export default function IshVaqtalariPage() {
   const { logs: activityLogs, deleteLog, updateLog } = useUserActivityLogs();
+  const { workers } = useWorkers();
   const { photos } = useUstaPhotos();
   const workPhotoMap = useMemo(() => buildWorkPhotoLookup(photos), [photos]);
   const [activityEditTarget, setActivityEditTarget] = useState(null);
@@ -131,7 +135,7 @@ export default function IshVaqtalariPage() {
 
   const filtered = useMemo(() => {
     const list = activityLogs.filter((log) => {
-      const dk = log.dateKey || instantToTashkentYMD(log.loginTime);
+      const dk = attendanceDate(log);
       return workLogDateKeyMatches(dk, periodMode, pickDate);
     });
     return list.sort(
@@ -139,6 +143,13 @@ export default function IshVaqtalariPage() {
         new Date(b.loginTime).getTime() - new Date(a.loginTime).getTime(),
     );
   }, [activityLogs, periodMode, pickDate]);
+
+  const salary = useMemo(() => calculateAttendanceSalary(filtered, workers), [filtered, workers]);
+  const salaryLabel = (log) => {
+    const row = salary.rows.get(log);
+    return row?.status === "missing-rate" ? "Stavka belgilanmagan" :
+      `${formatCurrency(row?.amount || 0)}${row?.status === "duplicate" ? " (bu kun hisoblangan)" : ""}`;
+  };
 
   const summary = useMemo(() => {
     const uniquePeople = new Set(filtered.map((l) => logPhotoPersonId(l)).filter(Boolean));
@@ -154,7 +165,7 @@ export default function IshVaqtalariPage() {
 
     const earliestByPersonDay = new Map();
     for (const log of filtered) {
-      const dk = log.dateKey || instantToTashkentYMD(log.loginTime);
+      const dk = attendanceDate(log);
       const pid = logPhotoPersonId(log);
       const key = `${pid}|${dk}`;
       const prev = earliestByPersonDay.get(key);
@@ -335,6 +346,10 @@ export default function IshVaqtalariPage() {
         </div>
       </div>
 
+      <p className="mt-4 text-sm font-semibold text-slate-700">
+        Tanlangan davr uchun kunlik haq jami: {formatCurrency(salary.total)}
+      </p>
+
       {filtered.length === 0 ? (
         <div className="mt-8 rounded-[1rem] border border-dashed border-slate-200/90 bg-slate-50/80 px-4 py-14 text-center shadow-inner">
           <p className="text-base font-medium text-slate-700">
@@ -348,7 +363,7 @@ export default function IshVaqtalariPage() {
           <ul className="mt-8 flex flex-col gap-3 md:hidden">
             {filtered.map((log) => {
               const online = log.logoutTime == null;
-              const dk = log.dateKey || instantToTashkentYMD(log.loginTime);
+              const dk = attendanceDate(log);
               const pid = logPhotoPersonId(log);
               const keldiPhoto = workPhotoMap.get(`${pid}|${dk}|${APP_PHOTO_TYPES.KELDI}`);
               const ketdiPhoto = workPhotoMap.get(`${pid}|${dk}|${APP_PHOTO_TYPES.KETDI}`);
@@ -383,6 +398,9 @@ export default function IshVaqtalariPage() {
                     {log.logoutTime
                       ? formatTashkentDateTime(log.logoutTime)
                       : "—"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Kunlik haq: {salaryLabel(log)}
                   </p>
                   <p className="mt-1 text-xs text-slate-600">
                     Ishlagan vaqt: {formatWorkedDuration(log.totalWorkTime)}
@@ -450,6 +468,7 @@ export default function IshVaqtalariPage() {
                   <th className="whitespace-nowrap px-4 py-3.5 font-semibold text-slate-700">
                     Ishlagan vaqt
                   </th>
+                  <th className="whitespace-nowrap px-4 py-3.5 font-semibold text-slate-700">Kunlik haq</th>
                   <th className="whitespace-nowrap px-4 py-3.5 font-semibold text-slate-700">
                     Qurilma
                   </th>
@@ -473,7 +492,7 @@ export default function IshVaqtalariPage() {
               <tbody>
                 {filtered.map((log) => {
                   const online = log.logoutTime == null;
-                  const dk = log.dateKey || instantToTashkentYMD(log.loginTime);
+                  const dk = attendanceDate(log);
                   const pid = logPhotoPersonId(log);
                   const keldiPhoto = workPhotoMap.get(`${pid}|${dk}|${APP_PHOTO_TYPES.KELDI}`);
                   const ketdiPhoto = workPhotoMap.get(`${pid}|${dk}|${APP_PHOTO_TYPES.KETDI}`);
@@ -513,6 +532,7 @@ export default function IshVaqtalariPage() {
                       <td className="whitespace-nowrap px-4 py-3.5 text-slate-700">
                         {formatWorkedDuration(log.totalWorkTime)}
                       </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-slate-700">{salaryLabel(log)}</td>
                       <td className="max-w-[180px] px-4 py-3.5 text-slate-600">
                         <span
                           className="line-clamp-2"

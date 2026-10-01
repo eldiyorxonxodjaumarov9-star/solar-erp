@@ -1,5 +1,4 @@
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { ensureFirebaseAuth, storage } from "./firebase.js";
+import { api } from '../api/http.js';
 import { withTimeout } from "../lib/asyncTimeout.js";
 
 const STORAGE_TIMEOUT_MS = 30_000;
@@ -11,31 +10,16 @@ const STORAGE_TIMEOUT_MS = 30_000;
  * @returns {Promise<{ downloadUrl: string; storagePath: string }>}
  */
 export async function uploadImageToStorage(file, storagePath) {
-  await withTimeout(
-    ensureFirebaseAuth(),
-    15_000,
-    "Firebase ulanish vaqti tugadi",
-  );
-  if (!storage) {
-    throw new Error("Firebase Storage sozlanmagan");
-  }
   const path = String(storagePath || "").replace(/^\/+/, "");
-  if (!path) throw new Error("Storage yo‘li kerak");
-
-  const storageRef = ref(storage, path);
-  const snapshot = await withTimeout(
-    uploadBytes(storageRef, file, {
-      contentType: file.type || "image/jpeg",
-    }),
+  const parts=path.split('/');
+  if(parts.length!==6 || parts[0]!=='private'||parts[2]!=='projects'||parts[4]!=='images')throw new Error('Private Storage scope kerak');
+  const form=new FormData();form.append('image',file,file.name||'photo.jpg');form.append('projectId',parts[3]);form.append('ownerId',parts[1]);
+  const result = await withTimeout(
+    api.postFormData('/api/upload/private-image',form),
     STORAGE_TIMEOUT_MS,
     "Rasm yuklash vaqti tugadi (Storage)",
   );
-  const downloadUrl = await withTimeout(
-    getDownloadURL(snapshot.ref),
-    15_000,
-    "Yuklangan rasm URL olinmadi",
-  );
-  return { downloadUrl, storagePath: path };
+  return { downloadUrl: result.downloadUrl, storagePath: result.storagePath };
 }
 
 export function buildPhotoStoragePath({
@@ -48,5 +32,5 @@ export function buildPhotoStoragePath({
   const pid = String(projectId || "general").replace(/[^\w-]/g, "_");
   const uid = String(userId || "user").replace(/[^\w-]/g, "_");
   const ext = suffix || "jpg";
-  return `${folder}/${pid}/${uid}_${ts}.${ext}`;
+  return `private/${uid}/projects/${pid}/images/${ts}_${crypto.randomUUID()}.${ext}`;
 }

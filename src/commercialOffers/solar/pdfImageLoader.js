@@ -11,7 +11,7 @@ function resolveAssetUrl(src) {
   }
 
   const base =
-    typeof import.meta !== "undefined" && import.meta.env?.BASE_URL
+    typeof import.meta !== "undefined" && import.meta.env.BASE_URL
       ? String(import.meta.env.BASE_URL)
       : "/";
   const normalized = path.startsWith("/") ? path : `/${path}`;

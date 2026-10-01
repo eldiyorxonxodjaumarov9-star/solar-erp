@@ -39,7 +39,8 @@ export function normalizeWorkerRecord(raw) {
   if (!fullName && !login) return null;
 
   const salary = normalizeSalaryField(raw.salary ?? raw.salarySom);
-  const dailySalary = Math.round(salary / 30);
+  const workingDays = normalizeWorkingDays(raw.workingDays);
+  const dailySalary = salary / workingDays;
 
   return {
     ...raw,
@@ -48,7 +49,7 @@ export function normalizeWorkerRecord(raw) {
     phone: String(raw.phone || "").trim(),
     position: String(raw.position || "usta").trim(),
     login,
-    password: String(raw.password || "").trim(),
+    password: "",
     createdAt:
       typeof raw.createdAt === "string" && raw.createdAt
         ? raw.createdAt
@@ -63,7 +64,10 @@ export function normalizeWorkerRecord(raw) {
           : "",
     rating: typeof raw.rating === "string" ? raw.rating : "",
     salary,
+    workingDays,
     dailySalary,
+    salaryEffectiveDate: String(raw.salaryEffectiveDate || "").trim(),
+    salaryHistory: Array.isArray(raw.salaryHistory) ? raw.salaryHistory : [],
     telegramUserId: String(
       raw.telegramUserId || raw.telegramId || raw.tgUserId || "",
     ).trim(),
@@ -76,6 +80,11 @@ export function normalizeWorkerRecord(raw) {
         ? { ...raw.points }
         : undefined,
   };
+}
+
+function normalizeWorkingDays(value) {
+  const days = Number(value);
+  return Number.isInteger(days) && days > 0 ? days : 30;
 }
 
 function normalizeWorkerStatus(value) {
@@ -158,7 +167,7 @@ export function mergeWorkersWithProfileFallback(remoteList, fallbackList) {
         login: fb.login,
         phone: fb.phone || raw.phone,
         position: fb.position || raw.position,
-        password: fb.password || raw.password,
+        password: "",
         salary:
           typeof raw.salary === "number" && Number.isFinite(raw.salary)
             ? raw.salary
@@ -213,7 +222,7 @@ export function loadWorkers() {
 
 /** @param {Worker[]} list */
 export function persistWorkers(list) {
-  localStorage.setItem(WORKERS_STORAGE_KEY, JSON.stringify(list));
+  localStorage.setItem(WORKERS_STORAGE_KEY, JSON.stringify(list.map(({ password, pin, credential, credentials, adminPassword, passwordHash, ...profile }) => profile)));
   window.dispatchEvent(new CustomEvent(WORKERS_CHANGED_EVENT));
 }
 

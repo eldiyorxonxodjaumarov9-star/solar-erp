@@ -81,6 +81,8 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
   const [password, setPassword] = useState("");
   /** Faqat raqamlar (DB’ga shu ketadi). */
   const [salaryDigits, setSalaryDigits] = useState("0");
+  const [workingDays, setWorkingDays] = useState("26");
+  const [salaryEffectiveDate, setSalaryEffectiveDate] = useState("");
   const [telegramUserId, setTelegramUserId] = useState("");
   const [telegramUsername, setTelegramUsername] = useState("");
   const [status, setStatus] = useState("active");
@@ -96,6 +98,8 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
       setLogin(initial.login ?? "");
       setPassword("");
       setSalaryDigits(String(parseSalaryNumber(initial.salary)));
+      setWorkingDays(String(Number(initial.workingDays) > 0 ? initial.workingDays : 30));
+      setSalaryEffectiveDate(String(initial.salaryEffectiveDate || new Date().toISOString().slice(0, 10)));
       setTelegramUserId(String(initial.telegramUserId || "").trim());
       setTelegramUsername(String(initial.telegramUsername || "").trim().replace(/^@/, ""));
       setStatus(String(initial.status || "active").trim() || "active");
@@ -108,6 +112,8 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
       setLogin("");
       setPassword("");
       setSalaryDigits("0");
+      setWorkingDays("26");
+      setSalaryEffectiveDate(new Date().toISOString().slice(0, 10));
       setTelegramUserId("");
       setTelegramUsername("");
       setStatus("active");
@@ -115,7 +121,7 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
     setError("");
   }, [initial, mode]);
 
-  const dailyPreview = calcDailySalary(salaryDigits);
+  const dailyPreview = calcDailySalary(salaryDigits, workingDays);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -128,6 +134,7 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
     const expRaw = experienceYears.trim();
     const rateRaw = rating.trim();
     const salaryRaw = salaryDigitsFromInput(salaryDigits);
+    const workingDaysNumber = Number(workingDays);
 
     if (!fn || !ph || !pos || !lg) {
       setError("Ism familiya, telefon, lavozim va login majburiy.");
@@ -145,14 +152,24 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
       return;
     }
 
+    if (!Number.isInteger(workingDaysNumber) || workingDaysNumber <= 0) {
+      setError("Oydagi ish kunlari soni 1 yoki undan katta butun son bo‘lishi kerak.");
+      return;
+    }
+
+    if (!salaryEffectiveDate) {
+      setError("Stavka amal qilish sanasini kiriting.");
+      return;
+    }
+
     let finalPassword;
     if (mode === "edit" && initial && !pw.trim()) {
-      finalPassword = initial.password;
+      finalPassword = undefined;
     } else {
       finalPassword = pw.trim();
     }
 
-    if (!finalPassword) {
+    if (mode !== "edit" && !finalPassword) {
       setError("Parol majburiy.");
       return;
     }
@@ -171,8 +188,6 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
       }
     }
 
-    const dailySalary = calcDailySalary(salary);
-
     setError("");
 
     await onSave({
@@ -186,7 +201,8 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
       login: lg,
       password: finalPassword,
       salary,
-      dailySalary,
+      workingDays: workingDaysNumber,
+      salaryEffectiveDate,
       telegramUserId: String(telegramUserId || "").trim(),
       telegramUsername: String(telegramUsername || "")
         .trim()
@@ -237,7 +253,7 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
 
             <div>
               <label htmlFor="w-salary" className="block text-sm font-medium text-slate-700">
-                Oylik
+                Oylik ish haqi (so‘m)
               </label>
               <input
                 id="w-salary"
@@ -252,8 +268,38 @@ function WorkerFormModal({ mode, initial, allWorkers, excludeWorkerId, onClose, 
               <p className="mt-1 text-xs text-slate-500">
                 Kunlik (avtomatik):{" "}
                 <span className="font-medium text-slate-700">{formatCurrency(dailyPreview)}</span>
-                {" "}· oylik / 30
               </p>
+            </div>
+
+            <div>
+              <label htmlFor="w-working-days" className="block text-sm font-medium text-slate-700">
+                Hisoblash uchun oydagi ish kunlari soni
+              </label>
+              <input
+                id="w-working-days"
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={workingDays}
+                onChange={(e) => setWorkingDays(e.target.value)}
+                className={INPUT_CLASS}
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="w-salary-effective-date" className="block text-sm font-medium text-slate-700">
+                Stavka amal qilish sanasi
+              </label>
+              <input
+                id="w-salary-effective-date"
+                type="date"
+                value={salaryEffectiveDate}
+                onChange={(e) => setSalaryEffectiveDate(e.target.value)}
+                className={INPUT_CLASS}
+                required
+              />
             </div>
 
             <div>
@@ -441,10 +487,26 @@ function WorkerCard({ worker, agg, onEdit, onDelete }) {
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Kunlik</p>
           <p className="mt-0.5 truncate text-sm font-semibold text-slate-900 tabular-nums">
-            {formatCurrency(calcDailySalary(worker.salary))}
+            {formatCurrency(calcDailySalary(worker.salary, worker.workingDays))}
           </p>
         </div>
       </div>
+
+      <p className="mt-2 text-xs text-slate-500">
+        Hisoblash: {worker.workingDays || 30} ish kuni ? Amal qilish sanasi: {worker.salaryEffectiveDate || "Belgilanmagan"}
+      </p>
+      {worker.salaryHistory?.length > 0 && (
+        <details className="mt-2 text-xs text-slate-600">
+          <summary className="cursor-pointer font-medium">Stavka tarixi ({worker.salaryHistory.length})</summary>
+          <ul className="mt-2 space-y-1">
+            {worker.salaryHistory.map((rate, index) => (
+              <li key={index}>
+                {rate.effectiveDate || "Sana noma?lum"}: {formatCurrency(rate.salary)} / {rate.workingDays} kun = {formatCurrency(calcDailySalary(rate.salary, rate.workingDays))}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       <div className="mt-2">
         <WorkerPointsSummary points={points} compact />

@@ -48,7 +48,7 @@ export async function telegramSendMessage(text) {
 
   const data = await res.json().catch(() => ({}));
   if (!data.ok) {
-    const err = new Error(data.description || "Telegram sendMessage xatosi");
+    const err = new Error("Telegram sendMessage xatosi");
     err.status = 502;
     throw err;
   }
@@ -88,7 +88,7 @@ export async function telegramSendPhoto(buffer, filename, caption) {
 
   const data = await res.json().catch(() => ({}));
   if (!data.ok) {
-    const err = new Error(data.description || "Telegram sendPhoto xatosi");
+    const err = new Error("Telegram sendPhoto xatosi");
     err.status = 502;
     throw err;
   }

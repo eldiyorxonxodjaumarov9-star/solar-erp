@@ -1,3 +1,4 @@
+import PrivateMedia from "./PrivateMedia.jsx";
 import { USTA_PHOTO_TYPE_OPTIONS } from "../photos/ustaPhotoStorage";
 import { formatTashkentDateTime } from "../photos/tashkentTime";
 
@@ -22,14 +23,14 @@ export default function PhotoThumbCard({
     <article className="flex flex-col overflow-hidden rounded-[12px] border border-slate-200/85 bg-white shadow-soft-md ring-1 ring-slate-900/[0.03]">
       <div className="aspect-[3/4] w-full shrink-0 overflow-hidden rounded-[12px] bg-slate-100">
         {isVideo ? (
-          <video
+          <PrivateMedia as="video"
             src={photo.videoUrl}
             controls
             playsInline
             className="h-full w-full object-cover"
           />
         ) : (
-          <img
+          <PrivateMedia
             src={photo.imageData || photo.imageUrl}
             alt=""
             className="h-full w-full object-cover"

@@ -61,7 +61,7 @@ function isLoopbackOrLan(url) {
 }
 
 /** Production APK hard fallback — hech qachon localhost bo‘lmasin. */
-export const ANDROID_PRODUCTION_API_BASE = "http://77.237.237.94";
+export const ANDROID_PRODUCTION_API_BASE = ""; // Release requires an explicit HTTPS API URL.
 
 /**
  * Android production uchun public VPS API.

@@ -63,11 +63,11 @@ export function startTelegramInboundPoller(config = {}) {
         try {
           await processUpdate(u);
         } catch (e) {
-          console.warn("[telegram-inbound] xabar yozilmadi:", e?.message || e);
+          console.warn("[telegram-inbound] message persistence failed");
         }
       }
     } catch (e) {
-      console.warn("[telegram-inbound] getUpdates:", e?.message || e);
+      console.warn("[telegram-inbound] getUpdates failed");
     } finally {
       running = false;
     }

@@ -1,143 +1,151 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() {
-      return request.auth != null;
+    function isAuthenticated() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'custom'
+        && sessionActive() && profileActive()
+        && request.auth.token.role in ['admin', 'usta', 'asisten']
+        && request.auth.token.accountId is string
+        && request.auth.uid == request.auth.token.role + ':' + request.auth.token.accountId;
     }
-
-    function isOwnerOrAdmin(uid) {
-      return isSignedIn() && (request.auth.uid == uid || request.auth.token.admin == true);
+    function activeProfile(data) { return data.get('disabled',false) == false && !(data.get('status','active') in ['inactive','noaktiv','off','disabled']); }
+    function profileActive() {
+      return request.auth.token.role == 'admin'
+        || (request.auth.token.role == 'usta' && (exists(/databases/$(database)/documents/workers/$(request.auth.token.accountId))
+          ? activeProfile(get(/databases/$(database)/documents/workers/$(request.auth.token.accountId)).data)
+          : activeProfile(get(/databases/$(database)/documents/users/$(request.auth.token.accountId)).data)))
+        || (request.auth.token.role == 'asisten' && activeProfile(get(/databases/$(database)/documents/assistants/$(request.auth.token.accountId)).data));
     }
-
-    match /workers/{docId} {
-      // Oylik (salary / dailySalary) — UI da faqat admin (Masterlar, Xarajatlar).
-      // Usta paneli bu kolleksiyani to‘liq o‘qimaydi; app-layer role guard asosiy himoya.
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    function sessionActive() {
+      return !exists(/databases/$(database)/documents/accountSecurity/$(request.auth.uid))
+        || (get(/databases/$(database)/documents/accountSecurity/$(request.auth.uid)).data.get('disabled',false) == false
+          && request.auth.token.get('sessionVersion',0) == get(/databases/$(database)/documents/accountSecurity/$(request.auth.uid)).data.get('sessionVersion',0));
     }
-
-    match /users/{docId} {
-      // workers alias (legacy). salary maydonlari shu yerda ham bo‘lishi mumkin.
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    function isAdmin() { return isAuthenticated() && request.auth.token.role == 'admin'; }
+    function workerId() { return request.auth.token.workerId; }
+    function assistantId() { return request.auth.token.assistantId; }
+    function isWorker() { return isAuthenticated() && request.auth.token.role == 'usta' && workerId() == request.auth.token.accountId; }
+    function isAssistant() { return isAuthenticated() && request.auth.token.role == 'asisten' && assistantId() == request.auth.token.accountId; }
+    function personId() { return isWorker() ? workerId() : 'asst_' + assistantId(); }
+    function ownPerson(id) { return (isWorker() || isAssistant()) && id == personId(); }
+    function safeProfile(data) {
+      return !data.keys().hasAny(['password', 'pin', 'credential', 'credentials', 'adminPassword', 'passwordHash', 'passwordSalt', 'privateKey', 'secret', 'token']);
     }
-
-    match /brigades/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    function noPayroll(data) {
+      return !data.keys().hasAny(['payrollWorkerId', 'payrollMonth', 'payrollPaymentType', 'salary', 'salaryHistory', 'dailySalary']);
     }
-
-    match /projects/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    function assigned(data) {
+      return isWorker() && (data.get('ustaId', '') == workerId()
+        || data.get('assignedWorkerId', '') == workerId()
+        || workerId() in data.get('assignedWorkerIds', []));
     }
-
-    match /expenses/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    function assignedProject(id) {
+      return assigned(get(/databases/$(database)/documents/projects/$(id)).data);
     }
-
-    match /work_logs/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isOwnerOrAdmin(resource.data.workerAuthUid);
+    function businessReader() { return isAdmin() || isAssistant(); }
+    function ownExpense(data) { return isWorker() && (data.get('payrollWorkerId', '') == workerId() || (noPayroll(data) && data.get('ustaId', '') == workerId())); }
+    function workerExpense(data) {
+      return isWorker() && data.ustaId == workerId() && noPayroll(data)
+        && data.keys().hasOnly(['ustaId', 'ustaName', 'brigadeId', 'brigadeName', 'projectId', 'projectName', 'type', 'amount', 'date', 'comment', 'receiptImageData', 'createdAt', 'updatedAt'])
+        && data.type in ['Materiallar', 'Transport', 'Ijara', 'Boshqa']
+        && data.amount is string && data.amount.matches('^[0-9]+$') && int(data.amount) > 0
+        && assignedProject(data.projectId);
     }
-
-    match /stage_photos/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /workers/{id} {
+      allow read: if safeProfile(resource.data) && (isAdmin() || (isWorker() && id == workerId()));
+      allow create: if isAdmin() && safeProfile(request.resource.data);
+      allow update: if isAdmin() && safeProfile(request.resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['disabled','status','login','loginLower','role']);
+      allow delete: if isAdmin();
     }
-
-    match /project_stage_locks/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /assistants/{id} {
+      allow read: if safeProfile(resource.data) && (isAdmin() || (isAssistant() && id == assistantId()));
+      allow create: if isAdmin() && safeProfile(request.resource.data);
+      allow update: if isAdmin() && safeProfile(request.resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['disabled','status','login','loginLower','role']);
+      allow delete: if isAdmin();
     }
-
-    match /project_worker_days/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    // Legacy accounts and the future credential store are server-only (Admin SDK).
+    match /users/{id} { allow read, write: if false; }
+    match /accountSecurity/{id} { allow read, write: if false; }
+    match /accountCredentials/{id} { allow read, write: if false; }
+    match /expenses/{id} {
+      allow read: if isAdmin() || ownExpense(resource.data);
+      allow create: if isAdmin() || workerExpense(request.resource.data);
+      allow update: if isAdmin() || (workerExpense(resource.data) && workerExpense(request.resource.data));
+      allow delete: if isAdmin() || workerExpense(resource.data);
     }
-
-    match /user_activity_logs/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /projects/{id} {
+      allow read: if businessReader() || assigned(resource.data);
+      allow create, delete: if businessReader();
+      allow update: if businessReader() || (assigned(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'holat', 'updatedAt', 'stages', 'stageTelegramStatus', 'progress']));
     }
-
-    match /usta_yorijnoma/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /brigades/{id} { allow read: if isAdmin() || isWorker() || isAssistant(); allow write: if isAdmin(); }
+    match /commercialOffers/{id} { allow read, write: if businessReader(); }
+    match /heatPumpForms/{id} { allow read, write: if businessReader(); }
+    match /supplyCalculations/{id} { allow read, write: if businessReader(); }
+    match /project_worker_days/{id} { allow read, write: if isAdmin(); }
+    match /points/{id} { allow read: if isAdmin() || (isWorker() && resource.data.userId == workerId()); allow write: if isAdmin(); }
+    match /user_activity_logs/{id} {
+      allow read: if isAdmin() || ownPerson(resource.data.ustaId);
+      allow create: if isAdmin() || (ownPerson(request.resource.data.ustaId) && noPayroll(request.resource.data) && safeProfile(request.resource.data));
+      allow update: if isAdmin() || (ownPerson(resource.data.ustaId) && request.resource.data.ustaId == resource.data.ustaId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['logoutTime', 'totalWorkTime', 'isOnline', 'logoutLocation', 'updatedAt']));
+      allow delete: if isAdmin();
     }
-
-    match /jalbalar/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /attendance/{id} {
+      allow read: if isAdmin() || ownPerson(resource.data.userId);
+      allow create, update: if isAdmin() || (ownPerson(request.resource.data.userId) && noPayroll(request.resource.data)
+        && safeProfile(request.resource.data) && (!exists(/databases/$(database)/documents/attendance/$(id)) || resource.data.userId == request.resource.data.userId));
+      allow delete: if isAdmin();
     }
-
-    match /telegram_events/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /stage_photos/{id} {
+      allow read: if isAdmin() || ownPerson(resource.data.ustaId);
+      allow create: if isAdmin() || (ownPerson(request.resource.data.ustaId) && noPayroll(request.resource.data) && safeProfile(request.resource.data));
+      allow update: if isAdmin() || (ownPerson(resource.data.ustaId) && request.resource.data.ustaId == resource.data.ustaId
+        && noPayroll(request.resource.data) && safeProfile(request.resource.data));
+      allow delete: if isAdmin() || ownPerson(resource.data.ustaId);
     }
-
-    match /telegramAttendanceLogs/{docId} {
-      // Server attendance Telegram log — APK o‘qimaydi
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /work_logs/{id} {
+      allow read: if isAdmin() || (isWorker() && resource.data.workerId == workerId());
+      allow create: if isAdmin() || (isWorker() && request.resource.data.workerId == workerId() && noPayroll(request.resource.data) && safeProfile(request.resource.data));
+      allow update: if isAdmin() || (isWorker() && resource.data.workerId == workerId()
+        && request.resource.data.workerId == workerId() && noPayroll(request.resource.data) && safeProfile(request.resource.data));
+      allow delete: if isAdmin();
     }
-
-    match /dailyAttendanceReports/{docId} {
-      // Kunlik 20:00 hisobot (idempotent, date = docId)
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /projectSteps/{id} {
+      allow read: if businessReader() || (isWorker() && resource.data.uploadedBy == workerId());
+      allow create: if isAdmin() || (isWorker() && request.resource.data.uploadedBy == workerId()
+        && noPayroll(request.resource.data) && safeProfile(request.resource.data)
+        && request.resource.data.status == 'pending' && assignedProject(request.resource.data.projectId));
+      allow update: if isAdmin() || (isWorker() && resource.data.uploadedBy == workerId()
+        && request.resource.data.uploadedBy == workerId() && resource.data.status == 'pending'
+        && noPayroll(request.resource.data) && safeProfile(request.resource.data)
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.status == 'pending' && assignedProject(resource.data.projectId));
+      allow delete: if isAdmin();
     }
-
-    match /telegram_messages/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /project_stage_locks/{id} { allow read: if businessReader() || assignedProject(id); allow write: if isAdmin(); }
+    match /jalbalar/{id} {
+      allow read: if isAdmin() || (isWorker() && resource.data.ustaId == workerId());
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isWorker() && resource.data.ustaId == workerId()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'doneAt', 'updatedAt']));
     }
-
-    match /projectSteps/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    match /complaints/{id} { allow read: if isAdmin() || (isWorker() && resource.data.userId == workerId()); allow write: if isAdmin(); }
+    match /usta_yorijnoma/{id} {
+      allow read: if isAdmin() || (isWorker() && id == workerId());
+      allow create, update: if isAdmin() || (isWorker() && id == workerId() && request.resource.data.workerId == workerId()
+        && request.resource.data.keys().hasOnly(['workerId','login','name','signatureDataUrl','completedAt','documentTitle','createdAt','updatedAt']));
+      allow delete: if isAdmin();
     }
-
-    match /attendance/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
-    }
-
-    match /points/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
-    }
-
-    match /complaints/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
-    }
-
-    match /assistants/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
-    }
-
-    match /heatPumpForms/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
-    }
-
-    match /commercialOffers/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
-    }
-
-    match /supplyCalculations/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
-    }
-
-    // Yangi kolleksiyalar (qoida qo‘shilmasa ham anonim auth bilan ishlashi uchun)
-    match /{document=**} {
-      allow read, write: if isSignedIn();
-    }
+    match /instructions/{id} { allow read: if isAdmin() || isWorker() || isAssistant(); allow write: if isAdmin(); }
+    match /telegram_messages/{id} { allow read, write: if isAdmin(); }
+    match /telegram_events/{id} { allow read, write: if isAdmin(); }
+    match /telegramAttendanceLogs/{id} { allow read, write: if isAdmin(); }
+    match /dailyAttendanceReports/{id} { allow read, write: if isAdmin(); }
+    match /{document=**} { allow read, write: if false; }
   }
 }

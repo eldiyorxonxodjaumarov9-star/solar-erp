@@ -1,6 +1,9 @@
 # SolarERP — arxitektura handoff (ChatGPT / Cursor)
 
-Bu fayl **manba haqiqati**. O‘zgartirishdan oldin o‘qib chiq. Oxirgi to‘liq audit: **2026-09-30**. Versiya: `package.json` → `1.0.81`.
+> Auth/security sections below describe the historical architecture. Current Stage 1?5 behavior, authorization matrix and rollout blockers: [SERVER_AUTH.md](SERVER_AUTH.md), [FIRESTORE_SECURITY.md](FIRESTORE_SECURITY.md), [PRODUCTION_SECURITY.md](PRODUCTION_SECURITY.md), [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md), current Stage 6 final gate [FINAL_RELEASE_GATE.md](FINAL_RELEASE_GATE.md).
+
+
+Bu fayl **manba haqiqati**. O‘zgartirishdan oldin o‘qib chiq. Oxirgi to‘liq audit: **2026-10-01**. Versiya: `package.json` → `1.0.81`.
 
 ## 1. Mahsulot nima
 

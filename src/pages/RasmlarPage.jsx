@@ -1,3 +1,4 @@
+import PrivateMedia from "../components/PrivateMedia.jsx";
 import { useEffect, useMemo, useState } from "react";
 import PhotoThumbCard from "../components/PhotoThumbCard";
 import StageStepApprovalPanel from "../components/StageStepApprovalPanel";

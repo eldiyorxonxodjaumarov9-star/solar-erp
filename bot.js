@@ -96,7 +96,6 @@ export async function runCycle(config) {
       latest = await fetchLatestImage(erpApiUrl);
     } catch (error) {
       console.error("ERP FAILED");
-      console.error(error);
       return;
     }
 
@@ -131,7 +130,6 @@ export async function runCycle(config) {
       console.log(`SENT SUCCESS: ${latest.id}`);
     } catch (error) {
       console.error("TELEGRAM FAILED");
-      console.error(error);
     }
   } finally {
     cycleRunning = false;
@@ -160,7 +158,7 @@ async function sendMorningGreeting(config) {
     });
     console.log(`[telegram] ${TASHKENT_TZ}: kunlik salom xabari yuborildi`);
   } catch (e) {
-    console.error("[telegram] Kunlik salom xabari yuborilmadi:", e?.message || e);
+    console.error("[telegram] Kunlik salom xabari yuborilmadi");
   }
 }
 
@@ -195,7 +193,7 @@ async function sendMasterMiddayReportReminder(config) {
     });
     console.log(`[telegram] ${TASHKENT_TZ}: masterlar tushlik eslatmasi yuborildi`);
   } catch (e) {
-    console.error("[telegram] Tushlik eslatmasi yuborilmadi:", e?.message || e);
+    console.error("[telegram] Tushlik eslatmasi yuborilmadi");
   }
 }
 
@@ -221,7 +219,7 @@ async function sendMasterEveningReminder(config) {
     });
     console.log(`[telegram] ${TASHKENT_TZ}: kechki hisobot eslatmasi yuborildi`);
   } catch (e) {
-    console.error("[telegram] Kechki eslatma yuborilmadi:", e?.message || e);
+    console.error("[telegram] Kechki eslatma yuborilmadi");
   }
 }
 
@@ -324,7 +322,7 @@ async function runMonthlyAutoReportJob(config) {
         dataset = r.data;
       }
     } catch (e) {
-      console.error("[telegram] MONTHLY_REPORT_DATA_URL:", e?.message || e);
+      console.error("[telegram] MONTHLY_REPORT_DATA_URL failed");
     }
   }
   if (!dataset && typeof getMonthlyDataset === "function") {
@@ -339,7 +337,7 @@ async function runMonthlyAutoReportJob(config) {
   try {
     await sendMonthlyReportBundleTelegram(config, dataset);
   } catch (e) {
-    console.error("[telegram] Oylik avto-hisobot yuborilmadi:", e?.message || e);
+    console.error("[telegram] Oylik avto-hisobot yuborilmadi");
   }
 }
 
@@ -378,11 +376,10 @@ async function runDailyAttendanceReportJob(config) {
     } else {
       console.error(
         "[telegram] Kunlik attendance hisobot yuborilmadi:",
-        result.error || "unknown",
       );
     }
   } catch (e) {
-    console.error("[telegram] Kunlik attendance hisobot xato:", e?.message || e);
+    console.error("[telegram] Kunlik attendance hisobot xato");
   }
 }
 

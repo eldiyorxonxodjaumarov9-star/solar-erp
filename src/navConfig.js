@@ -20,6 +20,7 @@ export const ASISTEN_MOBILE_BOTTOM_NAV = [
 export const USTA_PANEL_NAV = [
   { to: "/usta-panel", label: "Bosh sahifa", end: true },
   { to: "/usta-panel/jalba", label: "Jalba" },
+  { to: "/usta-panel/monthly-salary", label: "Oylik ish haqi" },
   { to: "/usta-panel/loyihalar", label: "Loyihalar" },
   { to: "/usta-panel/xarajatlar", label: "Xarajatlar" },
   { to: "/usta-panel/ish-vaqti", label: "Ish vaqti" },
@@ -36,6 +37,7 @@ export const USTA_MOBILE_BOTTOM_NAV = [
 export const USTA_EXTRA_MENU_NAV = [
   { to: "/usta-panel", label: "Bosh sahifa", end: true },
   { to: "/usta-panel/jalba", label: "Jalba" },
+  { to: "/usta-panel/monthly-salary", label: "Oylik ish haqi" },
 ];
 
 /** Primary sidebar navigation — paths match React Router routes */
@@ -59,6 +61,7 @@ export const MAIN_NAV = [
   { to: "/sifat-nazorati", label: "Sifat nazorati", isDisabled: true },
   { to: "/tahlil", label: "Tahlil" },
   { to: "/admin/monthly-reports", label: "Oylik hisobot" },
+  { to: "/admin/monthly-salary", label: "Oylik ish haqi" },
   { to: "/viloyat-ish-kunlari", label: "Viloyat ish kunlari" },
   { to: "/ish-vaqtlari", label: "Ish vaqtlari" },
   { to: "/monitoring", label: "Monitoring", isDisabled: true },

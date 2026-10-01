@@ -29,7 +29,7 @@ function applyAssistants(list, setAssistants) {
 }
 
 export function useAssistants() {
-  const [assistants, setAssistants] = useState(() => loadAssistants());
+  const [assistants, setAssistants] = useState([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -37,7 +37,7 @@ export function useAssistants() {
       applyAssistants(list, setAssistants);
     } catch (error) {
       console.error("Assistants read error:", error);
-      setAssistants(loadAssistants());
+      setAssistants([]);
     }
   }, []);
 
@@ -59,7 +59,7 @@ export function useAssistants() {
   useEffect(() => {
     const syncFromLocal = (event) => {
       if (event?.type === "storage") {
-        setAssistants(loadAssistants());
+        setAssistants([]);
       }
     };
     window.addEventListener("storage", syncFromLocal);

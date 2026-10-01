@@ -35,6 +35,8 @@ import TahlilPage from "./pages/TahlilPage";
 
 import ViloyatIshKunlariPage from "./pages/ViloyatIshKunlariPage";
 
+import MonthlySalaryPage from "./pages/MonthlySalaryPage";
+
 import IshVaqtalariPage from "./pages/IshVaqtalariPage";
 
 import SozlamalarPage from "./pages/SozlamalarPage";
@@ -136,6 +138,8 @@ export default function App() {
 
           <Route path="viloyat-ish-kunlari" element={<ViloyatIshKunlariPage />} />
 
+          <Route path="admin/monthly-salary" element={<MonthlySalaryPage />} />
+
           <Route path="ish-vaqtlari" element={<IshVaqtalariPage />} />
 
           <Route
@@ -170,6 +174,7 @@ export default function App() {
           <Route path="rasmlar" element={<UstaRasmlarPage />} />
 
           <Route path="ish-vaqti" element={<UstaIshVaqtlariPage />} />
+          <Route path="monthly-salary" element={<MonthlySalaryPage />} />
 
         </Route>
 
