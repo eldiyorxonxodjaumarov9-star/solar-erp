@@ -38,7 +38,7 @@
     "desktop:exe": "npm run build && npm run desktop:kill && node scripts/prepare-desktop-build.mjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
     "sync:clients": "node scripts/sync-clients.mjs",
     "sync:clients:deploy": "node scripts/sync-clients.mjs --deploy",
-    "test:auth": "node --experimental-vm-modules scripts/test-auth-login.mjs && node --experimental-vm-modules scripts/test-auth-frontend.mjs && node --experimental-vm-modules scripts/test-server-auth.mjs",
+    "test:auth": "node --experimental-vm-modules scripts/test-auth-login.mjs && node --experimental-vm-modules scripts/test-auth-frontend.mjs && node --experimental-vm-modules scripts/test-server-auth.mjs && node --experimental-vm-modules scripts/test-production-api-routing.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-solar-authorization \"node scripts/test-firestore-rules.mjs\"",
     "test:security": "node scripts/test-account-security.mjs",
     "test:storage": "firebase emulators:exec --only firestore,storage --project demo-solar-authorization \"node scripts/test-storage-rules.mjs\"",

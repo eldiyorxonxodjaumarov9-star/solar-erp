@@ -41,12 +41,6 @@ export function isAndroidNative() {
   return /android/i.test(navigator.userAgent || "");
 }
 
-function isLocalHost() {
-  if (typeof window === "undefined") return false;
-  const host = String(window.location.hostname || "").toLowerCase();
-  return host === "localhost" || host === "127.0.0.1";
-}
-
 function isLoopbackOrLan(url) {
   try {
     const u = new URL(url.includes("://") ? url : `http://${url}`);
@@ -106,9 +100,6 @@ export function getApiBaseUrl() {
   if (import.meta.env.DEV) {
     return getDesktopApiBase();
   }
-  if (isLocalHost()) {
-    return getDesktopApiBase() || getAndroidApiBase();
-  }
   return trimBase(import.meta.env.VITE_API_BASE) || getAndroidApiBase();
 }
 
@@ -122,28 +113,14 @@ export function getApiBaseCandidates() {
     const local = getDesktopApiBase();
     return local ? [local, ""] : [""];
   }
-  if (isLocalHost()) {
-    const bases = [];
-    const local = getDesktopApiBase();
-    if (local) bases.push(local);
-    bases.push("");
-    const remote = trimBase(import.meta.env.VITE_API_BASE) || getAndroidApiBase();
-    if (remote && !bases.includes(remote) && !isLoopbackOrLan(remote)) {
-      bases.push(remote);
-    }
-    return bases;
-  }
-  const remote = trimBase(import.meta.env.VITE_API_BASE);
-  return remote ? [remote] : [""];
+  // Packaged Electron serves UI on loopback; that is never a backend fallback.
+  const remote = trimBase(import.meta.env.VITE_API_BASE) || getAndroidApiBase();
+  return remote ? [remote] : [];
 }
 
 export function androidPublicApiPath(path) {
-  const p = String(path || "");
-  if (!p.startsWith("/api/")) return p;
-  if (p.startsWith("/api/supply/")) return p;
-  if (!isAndroidNative() && !isNativeCapacitor()) return p;
-  // nginx /api/ → Chorvoq :5000; Solar ERP faqat /api/supply/ orqali ochiq
-  return `/api/supply/compat${p.slice(4)}`;
+  // Dedicated SolarERP HTTPS vhost preserves /api paths for every platform.
+  return String(path || "");
 }
 
 export function logApiBaseOnce() {
