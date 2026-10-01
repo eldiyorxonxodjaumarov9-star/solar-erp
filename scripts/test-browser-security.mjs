@@ -52,8 +52,14 @@ api.use('/api',requireFirebaseSession(),(_req,res)=>res.json([]));
 const envDir=await mkdtemp(path.join(tmpdir(),'solar-vite-security-'));
 const env={VITE_FIREBASE_API_KEY:'demo-key',VITE_FIREBASE_PROJECT_ID:projectId,VITE_FIREBASE_AUTH_DOMAIN:`${projectId}.firebaseapp.com`,VITE_FIREBASE_STORAGE_BUCKET:`${projectId}.appspot.com`,VITE_FIREBASE_APP_ID:'1:123:web:demo',VITE_FIREBASE_EMULATORS:'true',VITE_API_BASE:'',VITE_API_BASE_HTTP:'',VITE_ANDROID_API_BASE:''};
 await writeFile(path.join(envDir,'.env'),Object.entries(env).map(([k,v])=>`${k}=${v}`).join('\n'));
-const vite=await createServer({configFile:false,envDir,plugins:[react(),{name:'local-security-api',configureServer(server){server.middlewares.use(api);}}],server:{host:'127.0.0.1',port:5179,strictPort:true}});
-await vite.listen();const base='http://127.0.0.1:5179';
+await writeFile(path.join(envDir,'.env.local'),[
+ `VITE_AUTH_EMULATOR_PORT=${process.env.FIREBASE_AUTH_EMULATOR_HOST.split(':')[1]}`,
+ `VITE_FIRESTORE_EMULATOR_PORT=${process.env.FIRESTORE_EMULATOR_HOST.split(':')[1]}`,
+ `VITE_STORAGE_EMULATOR_PORT=${process.env.FIREBASE_STORAGE_EMULATOR_HOST.split(':')[1]}`,
+].join('\n'));
+const browserPort=Number(process.env.SECURITY_BROWSER_PORT || 5179);
+const vite=await createServer({configFile:false,envDir,plugins:[react(),{name:'local-security-api',configureServer(server){server.middlewares.use(api);}}],server:{host:'127.0.0.1',port:browserPort,strictPort:true}});
+await vite.listen();const base=`http://127.0.0.1:${browserPort}`;
 await mkdir('.security-artifacts',{recursive:true});
 let browser;
 try{

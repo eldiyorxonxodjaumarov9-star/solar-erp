@@ -37,9 +37,9 @@ function initFirebaseApp() {
   storage = getStorage(app);
   // Explicit local development only; release builds cannot opt into emulators.
   if (import.meta.env.DEV && import.meta.env.VITE_FIREBASE_EMULATORS === 'true' && ['localhost','127.0.0.1'].includes(globalThis.location?.hostname)) {
-    connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});
-    connectFirestoreEmulator(db,'127.0.0.1',8080);
-    connectStorageEmulator(storage,'127.0.0.1',9199);
+    connectAuthEmulator(auth,`http://127.0.0.1:${Number(import.meta.env.VITE_AUTH_EMULATOR_PORT || 9099)}`,{disableWarnings:true});
+    connectFirestoreEmulator(db,'127.0.0.1',Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || 8080));
+    connectStorageEmulator(storage,'127.0.0.1',Number(import.meta.env.VITE_STORAGE_EMULATOR_PORT || 9199));
   }
   return { auth, db, storage };
 }

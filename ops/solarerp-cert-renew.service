@@ -1,0 +1,5 @@
+[Unit]
+Description=Renew SolarERP IP TLS certificate only
+[Service]
+Type=oneshot
+ExecStart=/opt/solarerp-certbot/bin/certbot renew --cert-name 77.237.237.94 --quiet --deploy-hook "/usr/sbin/nginx -t && /usr/bin/systemctl reload nginx"

@@ -9,6 +9,11 @@ const api=process.env.SOLARERP_HTTPS_API_ORIGIN||values.VITE_API_BASE;
 if(!api||cfg.projectId.startsWith('demo-'))throw new Error('Real configuration missing');
 const readiness=await checkHttpsApi(api);
 if(!readiness.publicPreflightPass)throw new Error('HTTPS/auth API not ready; refusing to produce a misleading release');
+// An unauthorized route preflight cannot prove real account/data readiness.
+const receiptPath=process.env.SOLARERP_AUTHORIZED_SMOKE_RECEIPT;
+if(!receiptPath)throw new Error('Authorized production smoke receipt required before final platform builds');
+const receipt=JSON.parse(fs.readFileSync(receiptPath,'utf8'));
+if(receipt.projectId!==cfg.projectId||receipt.apiOrigin!==api||receipt.realAdminLoginVerified!==true||receipt.productionDataVerified!==true||receipt.privateMediaVerified!==true||!Number.isFinite(Date.parse(receipt.checkedAt))||Date.now()-Date.parse(receipt.checkedAt)>86400000||Date.parse(receipt.checkedAt)>Date.now())throw new Error('Production authenticated/data/media smoke is incomplete or stale');
 const env={...process.env,VITE_API_BASE:api,VITE_ANDROID_API_BASE:api,VITE_API_BASE_HTTP:'',VITE_NATIVE_API_BASE:'',VITE_FIREBASE_EMULATORS:'false',VITE_FIREBASE_API_KEY:cfg.apiKey,VITE_FIREBASE_AUTH_DOMAIN:cfg.authDomain,VITE_FIREBASE_PROJECT_ID:cfg.projectId,VITE_FIREBASE_STORAGE_BUCKET:cfg.storageBucket,VITE_FIREBASE_MESSAGING_SENDER_ID:cfg.messagingSenderId,VITE_FIREBASE_APP_ID:cfg.appId,CSC_IDENTITY_AUTO_DISCOVERY:'false'};
 const version=JSON.parse(fs.readFileSync('package.json')).version.split('.').map(Number);
 if(fs.existsSync('release-artifacts/windows-client'))for(const name of fs.readdirSync('release-artifacts/windows-client')){const found=name.match(/^SolarERP-(\d+)\.(\d+)\.(\d+)-(?:portable|setup)\.exe$/);if(found&&Number(found[1])===version[0]&&Number(found[2])===version[1])version[2]=Math.max(version[2],Number(found[3]));}
