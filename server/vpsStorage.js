@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { constants } from 'node:fs';
-import { mkdir, lstat, open, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, lstat, open, readFile, writeFile, unlink } from 'node:fs/promises';
 import { validFile } from './fileSafety.js';
 
 const MAX_IMAGE = 10 * 1024 * 1024;
@@ -36,6 +36,10 @@ export function createVpsStorage(directory) {
    const metadata=JSON.parse(await readFile(file+'.json','utf8'));
    if(!IMAGE_TYPES.has(metadata.contentType)||metadata.size!==stat.size||metadata.metadata?.firebaseStorageDownloadTokens)throw new Error('Invalid media metadata');
    return [metadata];
+  },
+  async delete() {
+   const file=await target(objectPath);await this.getMetadata();
+   await unlink(file);await unlink(file+'.json');
   },
   async download() {
    const file=await target(objectPath);await this.getMetadata();

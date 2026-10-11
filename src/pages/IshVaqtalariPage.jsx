@@ -1,3 +1,4 @@
+import PrivateMedia from '../components/PrivateMedia';
 import { useEffect, useMemo, useState } from "react";
 import { shortDeviceLabel } from "../activity/deviceInfo";
 import { computeTotalWorkSeconds } from "../activity/userActivityLogsStorage";
@@ -70,14 +71,16 @@ function WorkPhotoThumb({ photo, label }) {
   if (!src) {
     return <span className="text-xs text-slate-400">—</span>;
   }
+  const privateSource = src.startsWith("private-storage:") || src.startsWith("/api/media/");
+  const Wrapper = privateSource ? "span" : "a";
   return (
-    <a href={src} target="_blank" rel="noreferrer" className="inline-block" title={label}>
-      <img
+    <Wrapper {...(privateSource ? {} : { href: src, target: "_blank", rel: "noreferrer" })} className="inline-block" title={label}>
+      <PrivateMedia
         src={src}
         alt={label}
         className="h-12 w-12 rounded-lg border border-slate-200 object-cover"
       />
-    </a>
+    </Wrapper>
   );
 }
 

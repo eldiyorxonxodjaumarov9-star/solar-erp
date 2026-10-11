@@ -146,6 +146,13 @@ service cloud.firestore {
     match /telegram_events/{id} { allow read, write: if isAdmin(); }
     match /telegramAttendanceLogs/{id} { allow read, write: if isAdmin(); }
     match /dailyAttendanceReports/{id} { allow read, write: if isAdmin(); }
+    // Server/Admin SDK only, including for admin clients.
+    match /telegramLinks/{id} { allow read, write: if false; }
+    match /telegramWorkerLinks/{id} { allow read, write: if false; }
+    match /telegramLinkReviews/{id} { allow read, write: if false; }
+    match /telegramLinkAudit/{id} { allow read, write: if false; }
+    match /telegramAttendanceState/{id} { allow read, write: if false; }
+    match /telegramAttendanceUpdates/{id} { allow read, write: if false; }
     match /{document=**} { allow read, write: if false; }
   }
 }

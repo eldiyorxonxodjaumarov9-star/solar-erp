@@ -1,4 +1,7 @@
+import { createTelegramAttendanceRouter } from './server/routes/telegramAttendanceApi.js';
+import { createTelegramReviewRouter } from './server/routes/telegramReviewApi.js';
 import express from "express";
+import { createTelegramLinkRouter } from "./server/routes/telegramLinkApi.js";
 import { createServerTokenIssuer } from "./server/firebaseAdminAuth.js";
 import dotenv from "dotenv";
 import axios from "axios";
@@ -131,6 +134,11 @@ app.use((req, _res, next) => {
   }
   next();
 });
+
+// Telegram authenticates its exact POST endpoint independently; other APIs retain session auth.
+app.use('/api/telegram/link', createTelegramLinkRouter());
+app.use('/api/telegram/attendance', createTelegramAttendanceRouter());
+app.use('/api/telegram/link-reviews', createTelegramReviewRouter());
 
 // Authenticate private requests before parsing large JSON/native upload payloads.
 app.use('/api', (req,res,next) => {
