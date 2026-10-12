@@ -1,6 +1,9 @@
+import { createHmac } from 'node:crypto';
+import { createTelegramCameraRouter } from '../server/routes/telegramCameraApi.js';
+import { validateCameraImage } from '../server/telegram/cameraSecurity.js';
 import { createPrivateStorageRouter } from '../server/routes/privateStorageApi.js';
 import { transform } from 'esbuild';
-import { createTelegramAttendanceHandler } from '../server/telegram/attendance.js';
+import { createTelegramAttendanceHandler as makeTelegramAttendanceHandler } from '../server/telegram/attendance.js';
 import jpeg from 'jpeg-js';
 import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -36,6 +39,9 @@ const photoDownloader=createTelegramPhotoDownloader({env:{TELEGRAM_BOT_TOKEN:'12
   return url.endsWith('/getFile') ? new Response(JSON.stringify({ok:true,result:{file_path:fakeFilePath,file_size:declaredSize??photoBytes.length}}))
     : new Response(photoBytes,{headers:{'content-type':'image/jpeg'}});
 }});
+const createTelegramAttendanceHandler=options=>makeTelegramAttendanceHandler({...options,getBucket:async()=>{if(downloadHook)await downloadHook();return options.getBucket();}});
+const cameraToken='123:local_test_token';
+const signedInit=(id=123)=>{const fields=new URLSearchParams({auth_date:String(Math.floor(new Date('2026-10-12T03:55:00Z').getTime()/1000)),user:JSON.stringify({id})});const data=[...fields].sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+'='+v).join('\n');fields.set('hash',createHmac('sha256',createHmac('sha256','WebAppData').update(cameraToken).digest()).update(data).digest('hex'));return fields.toString();};
 let failureMode = null, loseNextResponse = false;
 const tokenMarker = 'emulator-token-' + randomBytes(12).toString('hex');
 const errorMarker = 'PRIVATE_FAULT_DETAILS';
@@ -76,6 +82,8 @@ before(async () => {
       if(!['worker-w1','worker-w2'].includes(token))throw new Error();const workerId=token.slice(7);
       return {uid:'usta:'+workerId,role:'usta',accountId:workerId,workerId,firebase:{sign_in_provider:'custom'}};
     },async()=>{})}));
+  const cameraHandler=createTelegramAttendanceHandler({now:()=>new Date('2026-10-12T03:55:00Z'),getBucket:async()=>createVpsStorage(mediaDir)});
+  web.use('/api/telegram/camera',createTelegramCameraRouter({getDb:routeDb,env:{TELEGRAM_BOT_TOKEN:cameraToken},rateLimit:500,now:()=>new Date('2026-10-12T03:55:00Z'),handler:cameraHandler,notify:async()=>{}}));
   web.use('/api/telegram/attendance',createTelegramAttendanceRouter({getDb:routeDb,env:{TELEGRAM_WEBHOOK_SECRET:secret},
     now:()=>new Date('2026-10-12T03:55:00.000Z'),downloadPhoto:photoDownloader,getBucket:async()=>createVpsStorage(mediaDir)}));
   // Mirror the production rewrite and mount before the Firebase session gate.
@@ -531,14 +539,18 @@ test('approve generic success/error responses and no sensitive logs',async()=>{
 
 let botSequence=1000;
 const botInput=(text,id=123,extras={})=>({update_id:++botSequence,message:{from:{id},chat:{id,type:'private'},text,...extras}});
-const bot=payload=>post(payload,secret,'/api/telegram/attendance');
+const pendingFor=async id=>{const q=await db.collection('telegramAttendanceState').where('telegramUserId','==',String(id)).get();return q.docs.map(d=>d.data()).find(s=>['check_in_photo','check_out_photo'].includes(s.pendingAction)&&s.awaitingPhoto);};
+const cameraPost=async(id,state,bytes=photoBytes,mime='image/jpeg',extra={})=>{const r=await fetch(base+'/api/telegram/camera/photo'+(extra.query||''),{method:'POST',headers:{'x-telegram-init-data':signedInit(id),'x-camera-request':state.requestToken,'x-camera-action':state.pendingAction==='check_out_photo'?'check_out':'check_in','content-type':mime,...extra.headers},body:bytes});return {code:r.status,body:await r.json()};};
+const bot=async payload=>{const state=payload.message?.photo?await pendingFor(payload.message.from.id):null;if(state)return cameraPost(payload.message.from.id,state);return post(payload,secret,'/api/telegram/attendance');};
+const submitFor=async(handler,adapter=db,payload=photoInput())=>{const state=await pendingFor(payload.message.from.id)||(await db.collection('telegramAttendanceState').where('telegramUserId','==',String(payload.message.from.id)).get()).docs[0]?.data();return handler.submitCameraPhoto(adapter,{telegramUserId:String(payload.message.from.id),requestToken:state.requestToken,action:state.pendingAction==='check_out_photo'?'check_out':'check_in',buffer:photoBytes,contentType:'image/jpeg'});};
 const botText=(text,id=123)=>bot(botInput(text,id));
 const photoInput=()=>botInput(undefined,123,{photo:[{file_id:'test-photo-id',file_size:validJpeg.length}]});
 async function linkBot(){generic(await post(input()),123,success);}
 async function logOne(){const logs=await db.collection('user_activity_logs').get();assert.equal(logs.size,1);return logs.docs[0];}
+async function completeCheckOut(id=123){await botText('🔴 Ketdim',id);const payload=photoInput();payload.message.from.id=id;payload.message.chat.id=id;return bot(payload);}
 async function completeCheckIn(id=123){await botText('🟢 Keldim',id);const payload=photoInput();payload.message.from.id=id;payload.message.chat.id=id;return bot(payload);}
 async function photoWait(){await linkBot();await db.doc('user_activity_logs/app-photo-day').set({ustaId:'w1',ustaName:'Worker One',dateKey:'2026-10-12',loginTime:'2026-10-12T03:55:00.000Z',workAttendance:true,logoutTime:null,image:null});return botText('📷 Rasm yuborish');}
-const botDenied=result=>{assert.equal(result.code,200);assert.equal(result.body.text,'Amal bajarilmadi. Administratorga murojaat qiling.');};
+const botDenied=result=>{if(result.code===403){assert.deepEqual(result.body,{error:'Amal bajarilmadi'});return;}assert.equal(result.code,200);assert.equal(result.body.text,'Amal bajarilmadi. Administratorga murojaat qiling.');};
 test('bot active linked /start returns four-action reply keyboard',async()=>{
   await linkBot();const result=await botText('/start');assert.equal(result.code,200);
   assert.deepEqual(result.body.reply_markup.keyboard,[['🟢 Keldim','🔴 Ketdim'],['📷 Rasm yuborish','📍 Bugungi holatim']]);
@@ -548,7 +560,7 @@ test('bot unlinked start/contact retains secure linking flow',async()=>{
   generic(await bot({...input(),update_id:++botSequence}),123,success);await pairs(1);
 });
 test('bot check-in writes existing admin attendance schema with server timestamp',async()=>{
-  await linkBot();assert.equal((await completeCheckIn()).body.text,'🟢 Kelish qayd etildi.');
+  await linkBot();assert.equal((await completeCheckIn()).body.text,'✅ Kelish qayd etildi');
   const data=(await logOne()).data();assert.equal(data.ustaId,'w1');assert.equal(data.workAttendance,true);
   assert.equal(data.loginTime,'2026-10-12T03:55:00.000Z');assert.equal(data.dateKey,'2026-10-12');
   assert.equal(data.source,'telegram');assert.equal(data.type,'check_in');assert.equal(typeof data.checkInAt.toMillis(),'number');
@@ -560,7 +572,7 @@ test('bot duplicate check-in and repeated update preserve one record',async()=>{
 });
 test('bot checkout without check-in DENY',async()=>{await linkBot();botDenied(await botText('🔴 Ketdim'));assert.equal((await db.collection('user_activity_logs').get()).size,0);});
 test('bot checkout and duplicate checkout update same attendance row once',async()=>{
-  await linkBot();await completeCheckIn();const first=await logOne();assert.equal((await botText('🔴 Ketdim')).body.text,'🔴 Ketish qayd etildi.');
+  await linkBot();await completeCheckIn();const first=await logOne();assert.equal((await completeCheckOut()).body.text,'✅ Ketish qayd etildi');
   const before=(await logOne()).data();assert.equal((await logOne()).id,first.id);assert.equal(before.type,'check_out');assert.equal(typeof before.checkOutAt.toMillis(),'number');
   await botText('🔴 Ketdim');assert.deepEqual((await logOne()).data(),before);
 });
@@ -611,7 +623,7 @@ test('bot foreign account cannot use another worker photo state',async()=>{
 for(const action of ['🟢 Keldim','🔴 Ketdim'])test('bot parallel five '+action+' -> one attendance row',async()=>{
   await linkBot();if(action==='🔴 Ketdim')await completeCheckIn();
   const results=await Promise.all(Array.from({length:5},()=>botText(action)));
-  assert.ok(results.every(r=>r.code===200));if(action==='🟢 Keldim'){assert.equal((await db.collection('user_activity_logs').get()).size,0);const photos=await Promise.all(Array.from({length:5},()=>bot(photoInput())));assert.ok(photos.every(r=>r.code===200));assert.equal(photos.filter(r=>r.body.text==='🟢 Kelish qayd etildi.').length,1);}else assert.equal(results.filter(r=>r.body.text==='🔴 Ketish qayd etildi.').length,1);
+  assert.ok(results.every(r=>r.code===200));if(action==='🟢 Keldim')assert.equal((await db.collection('user_activity_logs').get()).size,0);else assert.equal((await logOne()).data().logoutTime,null);{const photos=await Promise.all(Array.from({length:5},()=>bot(photoInput())));assert.ok(photos.every(r=>r.code===200));assert.equal(photos.filter(r=>r.body.duplicate===false).length,1);}
   await logOne();
 });
 test('bot app attendance is reused, no parallel attendance system',async()=>{
@@ -620,10 +632,10 @@ test('bot app attendance is reused, no parallel attendance system',async()=>{
 });
 test('bot login-only app row is upgraded to work attendance, not duplicated',async()=>{
   await linkBot();await db.doc('user_activity_logs/login-day').set({ustaId:'w1',dateKey:'2026-10-12',loginTime:'2026-10-12T02:00:00.000Z',logoutTime:null});
-  assert.equal((await completeCheckIn()).body.text,'🟢 Kelish qayd etildi.');assert.equal((await logOne()).id,'login-day');assert.equal((await logOne()).data().workAttendance,true);
+  assert.equal((await completeCheckIn()).body.text,'✅ Kelish qayd etildi');assert.equal((await logOne()).id,'login-day');assert.equal((await logOne()).data().workAttendance,true);
 });
 test('bot today reports Tashkent times/photo status without location',async()=>{
-  await linkBot();assert.equal((await botText('📍 Bugungi holatim')).body.text,'📅 12.10.2026\n🟢 Keldi: —\n🔴 Ketdi: —\n📷 Rasm: yuborilmagan');
+  await linkBot();assert.equal((await botText('📍 Bugungi holatim')).body.text,'📅 12.10.2026\n🟢 Keldi: —\n📸 Kelish rasmi: —\n🔴 Ketdi: —\n📸 Ketish rasmi: —');
   await completeCheckIn();assert.ok((await botText('📍 Bugungi holatim')).body.text.includes('Keldi: 08:55'));
 });
 test('bot missing/invalid secret DENY before attendance writes',async()=>{
@@ -638,7 +650,7 @@ for(const action of ['🟢 Keldim','🔴 Ketdim'])test('bot database rollback/re
   await linkBot();if(action==='🔴 Ketdim')await completeCheckIn();const before=(await db.collection('user_activity_logs').get()).docs.map(doc=>doc.data());
   failureMode='transaction';await captureServerLogs(async()=>assert.equal((await botText(action)).code,503));failureMode=null;
   assert.deepEqual((await db.collection('user_activity_logs').get()).docs.map(doc=>doc.data()),before);
-  assert.equal((await botText(action)).code,200);if(action==='🟢 Keldim')await bot(photoInput());await logOne();
+  assert.equal((await botText(action)).code,200);await bot(photoInput());await logOne();
 });
 test('bot parallel photo requests commit one attachment and clean losing private copy',async()=>{
   await photoWait();const before=(await readdir(mediaDir,{recursive:true})).filter(name=>name.endsWith('.jpg')).length;
@@ -680,7 +692,7 @@ test('bot linked foreign account spoofed-target cannot write another worker atte
   await linkBot();await db.doc('workers/w2').set({phone:otherPhone,status:'active',fullName:'Worker Two'});
   generic(await post(input(456,otherPhone)),456,success);
   const payload=botInput('🟢 Keldim',456);payload.workerId='w1';payload.firebaseUid='usta:w1';payload.message.workerId='w1';
-  assert.equal((await bot(payload)).body.reply_markup.force_reply,true);const image=photoInput();image.message.from.id=456;image.message.chat.id=456;assert.equal((await bot(image)).body.text,'🟢 Kelish qayd etildi.');assert.equal((await logOne()).data().ustaId,'w2');
+  assert.equal((await bot(payload)).body.reply_markup.inline_keyboard[0][0].web_app.url.includes('/api/telegram/camera#action=check_in'),true);const image=photoInput();image.message.from.id=456;image.message.chat.id=456;assert.equal((await bot(image)).body.text,'✅ Kelish qayd etildi');assert.equal((await logOne()).data().ustaId,'w2');
   assert.equal((await db.collection('user_activity_logs').where('ustaId','==','w1').get()).size,0);
 });
 
@@ -688,7 +700,7 @@ test('bot linked foreign account spoofed-target cannot write another worker atte
 const pendingArrival = async () => { await linkBot(); return botText('🟢 Keldim'); };
 const attendanceCount = async () => (await db.collection('user_activity_logs').get()).size;
 test('Keldim waits for check_in_photo; no photo means zero attendance',async()=>{
- const result=await pendingArrival();assert.equal(result.body.text,'📸 Ishga kelishni tasdiqlash uchun hozir kameradan yuzingiz tushgan rasm yuboring.');assert.equal(result.body.reply_markup.force_reply,true);
+ const result=await pendingArrival();assert.equal(result.body.text,'📸 Ishga kelishni tasdiqlash uchun kamera orqali yuzingizni rasmga oling.');assert.equal(result.body.reply_markup.inline_keyboard[0][0].web_app.url.includes('/api/telegram/camera#action=check_in'),true);
  const state=(await db.collection('telegramAttendanceState').get()).docs[0].data();assert.equal(state.pendingAction,'check_in_photo');assert.equal(state.awaitingPhoto,true);assert.equal(await attendanceCount(),0);
  botDenied(await botText('🔴 Ketdim'));assert.equal(await attendanceCount(),0);
  assert.ok((await botText('📍 Bugungi holatim')).body.text.includes('Keldi: —'));
@@ -696,12 +708,12 @@ test('Keldim waits for check_in_photo; no photo means zero attendance',async()=>
 test('pending Keldim non-image asks for face photo without attendance',async()=>{
  await pendingArrival();for(const extras of [{text:'hello'},{document:{file_id:'spoof',mime_type:'image/jpeg'}}]){
  const result=await bot(botInput(undefined,123,extras));assert.equal(result.body.text,'⚠️ Iltimos, yuzingiz tushgan rasm yuboring.');}
- assert.equal(await attendanceCount(),0);assert.equal(downloadCount,0);assert.equal((await bot(photoInput())).body.text,'🟢 Kelish qayd etildi.');await logOne();
+ assert.equal(await attendanceCount(),0);assert.equal(downloadCount,0);assert.equal((await bot(photoInput())).body.text,'✅ Kelish qayd etildi');await logOne();
 });
 test('pending Keldim valid private photo commits attendance and admin keldi schema together',async()=>{
- await pendingArrival();const payload=photoInput();assert.equal((await bot(payload)).body.text,'🟢 Kelish qayd etildi.');
+ await pendingArrival();const payload=photoInput();assert.equal((await bot(payload)).body.text,'✅ Kelish qayd etildi');
  const log=(await logOne()).data(), photos=await db.collection('stage_photos').get();assert.equal(photos.size,1);const photo=photos.docs[0].data();assert.equal(photo.type,'keldi');assert.equal(photo.source,'work_log');assert.equal(log.image,photo.imageUrl);assert.equal(log.telegramPhoto,photo.id);assert.ok(photo.imageUrl.startsWith('private-storage:'));assert.ok(photo.storagePath.startsWith('private/w1/'));assert.equal(log.workerId,'w1');assert.equal(log.source,'telegram');assert.equal(typeof log.checkInAt.toMillis(),'number');
- const receipt=(await db.doc('telegramAttendanceUpdates/123_'+payload.update_id).get()).data();assert.equal(receipt.action,'check_in_photo');assert.equal(receipt.fileId,'test-photo-id');assert.equal(receipt.storagePath,photo.storagePath);
+ const receipts=await db.collection('telegramAttendanceUpdates').where('action','==','check_in_photo').get();assert.equal(receipts.size,1);const receipt=receipts.docs[0].data();assert.equal(receipt.action,'check_in_photo');assert.equal(receipt.fileId,'mini_app_camera');assert.equal(receipt.storagePath,photo.storagePath);
  await bot(payload);await bot(photoInput());assert.equal(await attendanceCount(),1);assert.equal((await db.collection('stage_photos').get()).size,1);
 });
 for(const kind of ['foreign','disabled','inactive'])test('pending Keldim photo security DENY '+kind,async()=>{
@@ -719,21 +731,56 @@ test('pending Keldim expired state cannot create attendance',async()=>{
 });
 test('pending Keldim failed private save leaves zero attendance and retry succeeds',async()=>{
  await pendingArrival();const handler=createTelegramAttendanceHandler({now:()=>new Date('2026-10-12T03:55:00Z'),downloadPhoto:photoDownloader,getBucket:async()=>({adapter:'vps',file:()=>({save:async()=>{throw new Error('Storage unavailable');},delete:async()=>{}})})});
- await assert.rejects(handler(db,photoInput()));assert.equal(await attendanceCount(),0);assert.equal((await db.collection('stage_photos').get()).size,0);assert.equal((await bot(photoInput())).body.text,'🟢 Kelish qayd etildi.');await logOne();
+ await assert.rejects(submitFor(handler,db));assert.equal(await attendanceCount(),0);assert.equal((await db.collection('stage_photos').get()).size,0);assert.equal((await bot(photoInput())).body.text,'✅ Kelish qayd etildi');await logOne();
 });
 test('pending Keldim transaction rollback cleans media and recovery commits once',async()=>{
- await pendingArrival();const before=(await readdir(mediaDir,{recursive:true})).filter(p=>p.endsWith('.jpg')).length;let fail=true;const handler=createTelegramAttendanceHandler({now:()=>new Date('2026-10-12T03:55:00Z'),downloadPhoto:photoDownloader,getBucket:async()=>createVpsStorage(mediaDir)});const adapter={collection:name=>db.collection(name),runTransaction:cb=>db.runTransaction(async tx=>{const result=await cb(tx);if(fail&&result.text==='🟢 Kelish qayd etildi.')throw new Error('Transaction unavailable');return result;})};await assert.rejects(handler(adapter,photoInput()));assert.equal(await attendanceCount(),0);assert.equal((await db.collection('stage_photos').get()).size,0);assert.equal((await readdir(mediaDir,{recursive:true})).filter(p=>p.endsWith('.jpg')).length,before);fail=false;assert.equal((await handler(adapter,photoInput())).text,'🟢 Kelish qayd etildi.');await logOne();
+ await pendingArrival();const before=(await readdir(mediaDir,{recursive:true})).filter(p=>p.endsWith('.jpg')).length;let fail=true;const handler=createTelegramAttendanceHandler({now:()=>new Date('2026-10-12T03:55:00Z'),downloadPhoto:photoDownloader,getBucket:async()=>createVpsStorage(mediaDir)});const adapter={collection:name=>db.collection(name),runTransaction:cb=>db.runTransaction(async tx=>{const result=await cb(tx);if(fail&&result.text==='✅ Kelish qayd etildi')throw new Error('Transaction unavailable');return result;})};await assert.rejects(submitFor(handler,adapter));assert.equal(await attendanceCount(),0);assert.equal((await db.collection('stage_photos').get()).size,0);assert.equal((await readdir(mediaDir,{recursive:true})).filter(p=>p.endsWith('.jpg')).length,before);fail=false;assert.equal((await submitFor(handler,adapter)).text,'✅ Kelish qayd etildi');await logOne();
 });
 
 test('pending Keldim lost commit acknowledgement preserves photo and idempotent retry',async()=>{
  await pendingArrival();const handler=createTelegramAttendanceHandler({now:()=>new Date('2026-10-12T03:55:00Z'),downloadPhoto:photoDownloader,getBucket:async()=>createVpsStorage(mediaDir)});let lose=true;
- const adapter={collection:name=>db.collection(name),runTransaction:async cb=>{const result=await db.runTransaction(cb);if(lose&&result.text==='🟢 Kelish qayd etildi.'){lose=false;throw new Error('Temporary unavailable');}return result;}};
- const payload=photoInput();await assert.rejects(handler(adapter,payload));await logOne();const photos=await db.collection('stage_photos').get();assert.equal(photos.size,1);const [bytes]=await createVpsStorage(mediaDir).file(photos.docs[0].data().storagePath).download();assert.deepEqual(bytes,validJpeg);assert.equal((await handler(db,payload)).status,'duplicate');assert.equal(await attendanceCount(),1);
+ const adapter={collection:name=>db.collection(name),runTransaction:async cb=>{const result=await db.runTransaction(cb);if(lose&&result.text==='✅ Kelish qayd etildi'){lose=false;throw new Error('Temporary unavailable');}return result;}};
+ const payload=photoInput();await assert.rejects(submitFor(handler,adapter,payload));await logOne();const photos=await db.collection('stage_photos').get();assert.equal(photos.size,1);const [bytes]=await createVpsStorage(mediaDir).file(photos.docs[0].data().storagePath).download();assert.deepEqual(bytes,validateCameraImage(validJpeg,'image/jpeg').buffer);assert.equal((await submitFor(handler,db,payload)).status,'duplicate');assert.equal(await attendanceCount(),1);
 });
 test('pending Keldim records photo completion time rather than button time',async()=>{
  await linkBot();let instant=new Date('2026-10-12T03:55:00Z');const handler=createTelegramAttendanceHandler({now:()=>instant,downloadPhoto:photoDownloader,getBucket:async()=>createVpsStorage(mediaDir)});
- assert.equal((await handler(db,botInput('🟢 Keldim'))).status,'pending');assert.equal(await attendanceCount(),0);instant=new Date('2026-10-12T04:00:00Z');await handler(db,photoInput());assert.equal((await logOne()).data().loginTime,'2026-10-12T04:00:00.000Z');
+ assert.equal((await handler(db,botInput('🟢 Keldim'))).status,'pending');assert.equal(await attendanceCount(),0);instant=new Date('2026-10-12T04:00:00Z');await submitFor(handler,db);assert.equal((await logOne()).data().loginTime,'2026-10-12T04:00:00.000Z');
 });
 test('pending Keldim day rollover during download DENY and removes private photo',async()=>{
- await linkBot();const before=(await readdir(mediaDir,{recursive:true})).filter(p=>p.endsWith('.jpg')).length;let instant=new Date('2026-10-12T18:59:00Z');const handler=createTelegramAttendanceHandler({now:()=>instant,downloadPhoto:photoDownloader,getBucket:async()=>createVpsStorage(mediaDir)});await handler(db,botInput('🟢 Keldim'));downloadHook=async()=>{instant=new Date('2026-10-12T19:01:00Z');};assert.equal((await handler(db,photoInput())).status,'denied');assert.equal(await attendanceCount(),0);assert.equal((await readdir(mediaDir,{recursive:true})).filter(p=>p.endsWith('.jpg')).length,before);
+ await linkBot();const before=(await readdir(mediaDir,{recursive:true})).filter(p=>p.endsWith('.jpg')).length;let instant=new Date('2026-10-12T18:59:00Z');const handler=createTelegramAttendanceHandler({now:()=>instant,downloadPhoto:photoDownloader,getBucket:async()=>createVpsStorage(mediaDir)});await handler(db,botInput('🟢 Keldim'));downloadHook=async()=>{instant=new Date('2026-10-12T19:01:00Z');};assert.equal((await submitFor(handler,db)).status,'denied');assert.equal(await attendanceCount(),0);assert.equal((await readdir(mediaDir,{recursive:true})).filter(p=>p.endsWith('.jpg')).length,before);
+});
+
+
+test('camera initData forged/missing/expired DENY before upload',async()=>{
+ await pendingArrival();const state=await pendingFor(123);for(const init of ['',signedInit(123).replace(/hash=[^&]+/,'hash='+'0'.repeat(64)),signedInit(456)]){const result=await cameraPost(123,state,validJpeg,'image/jpeg',{headers:{'x-telegram-init-data':init}});assert.equal(result.code,403);}assert.equal(await attendanceCount(),0);
+});
+test('camera forged worker identity query DENY, no attendance',async()=>{
+ await pendingArrival();const state=await pendingFor(123);assert.equal((await cameraPost(123,state,validJpeg,'image/jpeg',{query:'?workerId=w2&role=admin&firebaseUid=usta:w2'})).code,403);assert.equal(await attendanceCount(),0);
+});
+test('camera raw Telegram photo cannot confirm pending attendance',async()=>{
+ await pendingArrival();const result=await post(photoInput(),secret,'/api/telegram/attendance');assert.equal(result.code,200);assert.equal(result.body.text,'📸 Tasdiqlash uchun Kamerani ochish tugmasidan foydalaning.');assert.equal(await attendanceCount(),0);
+});
+test('camera checkout requires private photo; click and cancellation do not write checkout',async()=>{
+ await linkBot();await completeCheckIn();const result=await botText('🔴 Ketdim');assert.equal(result.body.reply_markup.inline_keyboard[0][0].web_app.url.includes('action=check_out'),true);assert.equal((await logOne()).data().logoutTime,null);await botText('text');assert.equal((await logOne()).data().logoutTime,null);
+ assert.equal((await bot(photoInput())).body.text,'✅ Ketish qayd etildi');const record=(await logOne()).data();assert.ok(record.logoutTime);assert.ok(record.departureImage.startsWith('private-storage:'));assert.equal(typeof record.checkOutAt.toMillis(),'number');const photos=await db.collection('stage_photos').get();assert.equal(photos.size,2);assert.ok(photos.docs.some(d=>d.data().type==='ketdi'));const before=JSON.stringify(record);await bot(photoInput());await botText('🔴 Ketdim');assert.equal(JSON.stringify((await logOne()).data()),before);
+ const today=(await botText('📍 Bugungi holatim')).body.text;assert.ok(today.includes('Kelish rasmi: ✅'));assert.ok(today.includes('Ketish rasmi: ✅'));
+});
+test('camera browser fallback ticket bound to identity/action/request and duplicate retry',async()=>{
+ await pendingArrival();const state=await pendingFor(123);const r=await fetch(base+'/api/telegram/camera/authorize',{method:'POST',headers:{'content-type':'application/json','x-telegram-init-data':signedInit()},body:JSON.stringify({requestToken:state.requestToken,action:'check_in'})});assert.equal(r.status,200);const {browserTicket}=await r.json();
+ const headers={'x-telegram-init-data':'',authorization:'Bearer '+browserTicket};const result=await cameraPost(123,state,validJpeg,'image/jpeg',{headers});assert.equal(result.code,200);assert.equal(result.body.ok,true);const duplicate=await cameraPost(123,state,validJpeg,'image/jpeg',{headers});assert.equal(duplicate.body.duplicate,true);await logOne();
+ assert.equal((await cameraPost(123,{...state,requestToken:'00000000-0000-4000-8000-000000000000'},validJpeg,'image/jpeg',{headers})).code,403);
+});
+test('camera forged authorize body DENY and public assets expose no private data',async()=>{
+ await pendingArrival();const state=await pendingFor(123);const r=await fetch(base+'/api/telegram/camera/authorize',{method:'POST',headers:{'content-type':'application/json','x-telegram-init-data':signedInit()},body:JSON.stringify({requestToken:state.requestToken,action:'check_in',workerId:'w2'})});assert.equal(r.status,403);
+ const page=await fetch(base+'/api/telegram/camera/');assert.equal(page.status,200);const html=await page.text();assert.ok(html.includes('playsinline'));assert.ok(!html.includes(phone));assert.ok(!html.includes(cameraToken));assert.ok(page.headers.get('content-security-policy').includes('frame-ancestors'));assert.equal(page.headers.get('permissions-policy'),'camera=(self), microphone=(), geolocation=()');
+});
+
+test('camera valid PNG stored privately in existing keldi model',async()=>{
+ const {PNG}=await import('pngjs');await pendingArrival();const state=await pendingFor(123);const bytes=PNG.sync.write({width:2,height:2,data:Buffer.alloc(16,255)});assert.equal((await cameraPost(123,state,bytes,'image/png')).code,200);await logOne();const photo=(await db.collection('stage_photos').get()).docs[0].data();assert.equal(photo.contentType,'image/png');assert.ok(photo.storagePath.endsWith('.png'));const [stored]=await createVpsStorage(mediaDir).file(photo.storagePath).download();assert.equal(PNG.sync.read(stored).width,2);
+});
+test('camera oversized upload and MIME mismatch create zero attendance',async()=>{
+ await pendingArrival();const state=await pendingFor(123);assert.equal((await cameraPost(123,state,Buffer.alloc(MAX_TELEGRAM_IMAGE+1))).code,413);assert.equal((await cameraPost(123,state,Buffer.from('MZ'),'application/octet-stream')).code,415);assert.equal((await cameraPost(123,state,validJpeg,'image/png')).code,503);assert.equal(await attendanceCount(),0);
+});
+test('camera checkout photo save failure preserves existing checkin and no checkout',async()=>{
+ await linkBot();await completeCheckIn();await botText('🔴 Ketdim');const before=JSON.stringify((await logOne()).data());const handler=createTelegramAttendanceHandler({now:()=>new Date('2026-10-12T03:55:00Z'),getBucket:async()=>({adapter:'vps',file:()=>({save:async()=>{throw new Error('Storage unavailable');},delete:async()=>{}})})});await assert.rejects(submitFor(handler));assert.equal(JSON.stringify((await logOne()).data()),before);assert.equal((await db.collection('stage_photos').get()).size,1);
 });
