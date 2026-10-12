@@ -1,3 +1,4 @@
+import { createPhotoConfirmationNotifier } from '../telegram/attendanceResponse.js';
 import { Router, json, raw } from 'express';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -8,10 +9,7 @@ import { verifyMiniAppInitData, cameraTicket, verifyCameraTicket, CAMERA_MAX_BYT
 import { instantToTashkentYMD } from '../../src/photos/tashkentTime.js';
 const tokenPattern = /^[a-f0-9-]{36}$/;
 const allowedActions = new Set(['check_in','check_out']);
-export function createTelegramCameraRouter({ getDb = getServerAdminDb, env = process.env, now = () => new Date(), rateLimit = 40, handler = createTelegramAttendanceHandler(), notify = async (id, text) => {
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: Number(id), text }), signal: AbortSignal.timeout(10000) });
-  if (!response.ok || !(await response.json()).ok) throw new Error('Notification unavailable');
-} } = {}) {
+export function createTelegramCameraRouter({ getDb = getServerAdminDb, env = process.env, now = () => new Date(), rateLimit = 40, handler = createTelegramAttendanceHandler(), notify = createPhotoConfirmationNotifier({env}) } = {}) {
   const router = Router(), rates = new Map();
   router.use((_req,res,next) => { res.setHeader('Cache-Control','no-store'); res.setHeader('Referrer-Policy','no-referrer'); res.setHeader('X-Content-Type-Options','nosniff'); next(); });
   const webRoot = fileURLToPath(new URL('../web/telegram-camera/', import.meta.url));
@@ -71,7 +69,7 @@ export function createTelegramCameraRouter({ getDb = getServerAdminDb, env = pro
       const result=await handler.submitCameraPhoto(req.cameraDb,{...req.cameraAction,buffer:req.body,contentType:req.get('content-type')});
       if(!['done','duplicate'].includes(result.status))return res.status(403).json({error:'Amal bajarilmadi'});
       let notificationSent=false;
-      if(result.status==='done'){try{await notify(req.cameraIdentity.telegramUserId,result.text);notificationSent=true;}catch{/* Safe retry: attendance is already durable, never create it again. */}}
+      if(result.status==='done'){try{await notify(req.cameraIdentity.telegramUserId,result.text,{db:req.cameraDb,requestToken:req.cameraAction.requestToken,action:req.cameraAction.action});notificationSent=true;}catch{/* Safe retry: attendance is already durable, never create it again. */}}
       res.json({ok:true,text:result.text,duplicate:result.status==='duplicate',notificationSent});
     } catch { res.status(503).json({error:'Amal vaqtincha bajarilmadi'}); }
   });

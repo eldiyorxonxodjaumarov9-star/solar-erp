@@ -1,3 +1,4 @@
+import { attendanceCaption } from './attendanceResponse.js';
 import { validateCameraImage } from './cameraSecurity.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -13,7 +14,6 @@ const denied = () => ({ status: 'denied', text: 'Amal bajarilmadi. Administrator
 const answer = (text, status = 'done') => ({ status, text, reply_markup: ATTENDANCE_MENU });
 const actions = new Map([['🟢 Keldim','check_in'],['🔴 Ketdim','check_out'],['📷 Rasm yuborish','photo_wait'],['📍 Bugungi holatim','today']]);
 const actionFor = text => actions.get(text);
-const time = iso => iso ? new Intl.DateTimeFormat('uz-UZ', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)) : '—';
 export function createTelegramAttendanceHandler({ now = () => new Date(), downloadPhoto = createTelegramPhotoDownloader(), getBucket = serverStorageBucket, miniAppUrl = process.env.TELEGRAM_CAMERA_URL || 'https://77.237.237.94/api/telegram/camera' } = {}) {
   const handler = async (db, update, camera) => {
     const message = update?.message, id = message?.from?.id;
@@ -57,7 +57,11 @@ export function createTelegramAttendanceHandler({ now = () => new Date(), downlo
       const existingPhoto = await tx.get(photoRef);
       const arrivalPhoto = await tx.get(db.collection('stage_photos').doc(workerId + '_keldi_' + date));
       const departurePhoto = await tx.get(db.collection('stage_photos').doc(workerId + '_ketdi_' + date));
-      if (action === 'today') return answer(`📅 ${date.split('-').reverse().join('.')}\n🟢 Keldi: ${time(hasCheckIn ? record.loginTime : null)}\n📸 Kelish rasmi: ${arrivalPhoto.exists ? '✅' : '—'}\n🔴 Ketdi: ${time(record?.logoutTime)}\n📸 Ketish rasmi: ${departurePhoto.exists ? '✅' : '—'}`);
+      if (action === 'today') {
+        const worker=await tx.get(db.collection('workers').doc(workerId));
+        const profile=worker.exists?worker.data():(await tx.get(db.collection('users').doc(workerId))).data();
+        return answer(attendanceCaption({record:record||{},workerName:record?.ustaName||profile?.fullName||profile?.name,date,arrival:arrivalPhoto.exists,departure:departurePhoto.exists}));
+      }
       if (action === 'check_in' && hasCheckIn) return answer('Bugungi kelish qayd etilgan.', 'duplicate');
       if (action !== 'check_in' && !hasCheckIn && !(action === 'photo' && pendingCheckIn)) return denied();
       if (action === 'photo' && pendingCheckIn && hasCheckIn) return answer('Bugungi kelish qayd etilgan.', 'duplicate');
