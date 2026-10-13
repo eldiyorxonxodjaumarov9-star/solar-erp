@@ -182,6 +182,7 @@ export function buildDailyAttendanceReport(input) {
     });
     const st = ensure(wid);
     if (!st) continue;
+    if (log.type === "day_off" || log.dayOff === true) { st.dayOff = true; continue; }
     if (log.loginTime || log.workAttendance === true || log.loginLocation) {
       st.arrived = true;
     }

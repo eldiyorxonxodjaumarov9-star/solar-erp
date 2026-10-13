@@ -20,7 +20,7 @@ function normalizeLogShape(x) {
   return {
     ...x,
     logoutTime,
-    isOnline: logoutTime == null,
+    isOnline: x.type !== "day_off" && logoutTime == null,
     totalWorkTime:
       logoutTime == null ? null : Number.isFinite(Number(x.totalWorkTime)) ? Number(x.totalWorkTime) : 0,
     deviceInfo: {

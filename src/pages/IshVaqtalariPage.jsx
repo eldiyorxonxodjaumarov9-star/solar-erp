@@ -155,9 +155,9 @@ export default function IshVaqtalariPage() {
   };
 
   const summary = useMemo(() => {
-    const uniquePeople = new Set(filtered.map((l) => logPhotoPersonId(l)).filter(Boolean));
+    const uniquePeople = new Set(filtered.filter((l) => l.type !== "day_off").map((l) => logPhotoPersonId(l)).filter(Boolean));
     const onlinePeople = new Set(
-      filtered.filter((l) => l.logoutTime == null).map((l) => logPhotoPersonId(l)),
+      filtered.filter((l) => l.type !== "day_off" && l.logoutTime == null).map((l) => logPhotoPersonId(l)),
     );
     let sumWork = 0;
     for (const l of filtered) {
@@ -168,6 +168,7 @@ export default function IshVaqtalariPage() {
 
     const earliestByPersonDay = new Map();
     for (const log of filtered) {
+      if (log.type === "day_off") continue;
       const dk = attendanceDate(log);
       const pid = logPhotoPersonId(log);
       const key = `${pid}|${dk}`;
@@ -365,7 +366,7 @@ export default function IshVaqtalariPage() {
         <>
           <ul className="mt-8 flex flex-col gap-3 md:hidden">
             {filtered.map((log) => {
-              const online = log.logoutTime == null;
+              const online = log.type !== "day_off" && log.logoutTime == null;
               const dk = attendanceDate(log);
               const pid = logPhotoPersonId(log);
               const keldiPhoto = workPhotoMap.get(`${pid}|${dk}|${APP_PHOTO_TYPES.KELDI}`);
@@ -390,11 +391,12 @@ export default function IshVaqtalariPage() {
                           : "bg-slate-100 text-slate-600"
                       }`}
                     >
-                      {online ? "Online" : "Offline"}
+                      {log.type === "day_off" ? "🏠 Dam olish" : online ? "Online" : "Offline"}
                     </span>
                   </p>
                   <p className="mt-2 text-xs text-slate-600">
-                    Kirgan: {formatTashkentDateTime(log.loginTime)}
+                    {log.type === "day_off" ? `📝 Sabab: ${log.reason || log.restMessage || "—"}` : `Kirgan: ${formatTashkentDateTime(log.loginTime)}`}
+                    {log.type === "day_off" ? <span className="block">📅 Sana: {formatTashkentDateMedium(`${dk}T12:00:00+05:00`)}</span> : null}
                   </p>
                   <p className="mt-1 text-xs text-slate-600">
                     Chiqqan:{" "}
@@ -494,7 +496,7 @@ export default function IshVaqtalariPage() {
               </thead>
               <tbody>
                 {filtered.map((log) => {
-                  const online = log.logoutTime == null;
+                  const online = log.type !== "day_off" && log.logoutTime == null;
                   const dk = attendanceDate(log);
                   const pid = logPhotoPersonId(log);
                   const keldiPhoto = workPhotoMap.get(`${pid}|${dk}|${APP_PHOTO_TYPES.KELDI}`);
@@ -521,7 +523,7 @@ export default function IshVaqtalariPage() {
                               : "bg-slate-100 text-slate-600"
                           }`}
                         >
-                          {online ? "Online" : "Offline"}
+                          {log.type === "day_off" ? "🏠 Dam olish" : online ? "Online" : "Offline"}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-slate-600">

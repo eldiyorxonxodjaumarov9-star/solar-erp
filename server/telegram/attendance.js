@@ -1,3 +1,4 @@
+import { handleDayOff, DAY_OFF_BUTTON, CANCEL, CONFIRM } from './dayOff.js';
 import { attendanceCaption } from './attendanceResponse.js';
 import { validateCameraImage } from './cameraSecurity.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -8,11 +9,11 @@ import { handleTelegramLink } from './linking.js';
 import { createTelegramPhotoDownloader, validateTelegramImage } from './photoDownload.js';
 import { serverStorageBucket, savePrivateImage } from '../privateStorage.js';
 import { instantToTashkentYMD } from '../../src/photos/tashkentTime.js';
-export const ATTENDANCE_MENU = { keyboard: [['🟢 Keldim', '🔴 Ketdim'], ['📷 Rasm yuborish', '📍 Bugungi holatim']], resize_keyboard: true };
+export const ATTENDANCE_MENU = { keyboard: [['🟢 Keldim', '🔴 Ketdim'], [DAY_OFF_BUTTON, '📍 Bugungi holatim']], resize_keyboard: true };
 const cameraPrompt = (action, token, url) => ({ status: 'pending', text: action === 'check_in' ? '📸 Ishga kelishni tasdiqlash uchun kamera orqali yuzingizni rasmga oling.' : '📸 Ishdan ketishni tasdiqlash uchun kamera orqali yuzingizni rasmga oling.', reply_markup: { inline_keyboard: [[{ text: '📸 Kamerani ochish', web_app: { url: `${url}#action=${action}&request=${token}` } }]] } });
 const denied = () => ({ status: 'denied', text: 'Amal bajarilmadi. Administratorga murojaat qiling.' });
 const answer = (text, status = 'done') => ({ status, text, reply_markup: ATTENDANCE_MENU });
-const actions = new Map([['🟢 Keldim','check_in'],['🔴 Ketdim','check_out'],['📷 Rasm yuborish','photo_wait'],['📍 Bugungi holatim','today']]);
+const actions = new Map([['🟢 Keldim','check_in'],['🔴 Ketdim','check_out'],['📷 Rasm yuborish','photo_wait'],['📍 Bugungi holatim','today'],[DAY_OFF_BUTTON,'day_off_start'],[CANCEL,'day_off_cancel'],[CONFIRM,'day_off_confirm']]);
 const actionFor = text => actions.get(text);
 export function createTelegramAttendanceHandler({ now = () => new Date(), downloadPhoto = createTelegramPhotoDownloader(), getBucket = serverStorageBucket, miniAppUrl = process.env.TELEGRAM_CAMERA_URL || 'https://77.237.237.94/api/telegram/camera' } = {}) {
   const handler = async (db, update, camera) => {
@@ -38,7 +39,7 @@ export function createTelegramAttendanceHandler({ now = () => new Date(), downlo
       const stateRef = db.collection('telegramAttendanceState').doc(key), stateDoc = await tx.get(stateRef), state = stateDoc.data() || {};
       const pendingCheckIn = state.pendingAction === 'check_in_photo' && state.awaitingPhoto && state.telegramUserId === telegramId && state.expiresAt >= now().getTime();
       const pendingCheckOut = state.pendingAction === 'check_out_photo' && state.awaitingPhoto && state.telegramUserId === telegramId && state.expiresAt >= now().getTime();
-      if (!action) return (pendingCheckIn || pendingCheckOut) ? answer('⚠️ Iltimos, yuzingiz tushgan rasm yuboring.', 'denied') : denied();
+      if (!action && !['day_off_reason','day_off_confirm'].includes(state.pendingAction)) return (pendingCheckIn || pendingCheckOut) ? answer('⚠️ Iltimos, yuzingiz tushgan rasm yuboring.', 'denied') : denied();
       const receiptRef = db.collection('telegramAttendanceUpdates').doc(camera ? telegramId + '_mini_' + camera.requestToken : telegramId + '_' + update.update_id);
       const receipt = await tx.get(receiptRef);
       if (receipt.exists) {
@@ -52,6 +53,9 @@ export function createTelegramAttendanceHandler({ now = () => new Date(), downlo
       const existing = today[0], record = existing?.data();
       const hasCheckIn = Boolean(record?.loginTime && record.workAttendance === true);
       const logRef = existing?.ref || db.collection('user_activity_logs').doc('telegram_' + key);
+      const offResult = await handleDayOff({tx,db,action,message:{...message,updateId:update.update_id},state,stateRef,receiptRef,record,existing,logRef,workerId,telegramId,date,now,requestToken,answer});
+      if(offResult)return offResult;
+      if(record?.type==='day_off'||record?.dayOff===true)return answer('Bugungi dam olish qayd etilgan.','denied');
       const photoType = pendingCheckOut || (!pendingCheckIn && record?.logoutTime) ? 'ketdi' : 'keldi';
       const photoRef = db.collection('stage_photos').doc(workerId + '_' + photoType + '_' + date);
       const existingPhoto = await tx.get(photoRef);
@@ -104,7 +108,7 @@ export function createTelegramAttendanceHandler({ now = () => new Date(), downlo
         ...(action === 'photo' ? { fileId: message.photo.at(-1).file_id, storagePath: attach.saved.storagePath } : {}) });
       if (['check_in','check_out'].includes(action)) return cameraPrompt(action, requestToken, miniAppUrl);
       return answer(action === 'photo' && pendingCheckIn ? '✅ Kelish qayd etildi' : action === 'photo' && pendingCheckOut ? '✅ Ketish qayd etildi' : action === 'photo_wait' ? '📷 Iltimos, ish joyidan rasm yuboring.' : '📷 Rasm saqlandi.');
-    });
+    }, message.text === CONFIRM ? { maxAttempts: 10 } : undefined);
     try {
       const result = await run();
       if (result.unlinked) return message.contact || /^\/start(?:\s|$)/.test(message.text || '') ? handleTelegramLink(db, update) : denied();

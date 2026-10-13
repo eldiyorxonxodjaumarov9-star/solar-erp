@@ -46,7 +46,7 @@ function normalizeLog(x) {
     brigadeName: typeof x.brigadeName === "string" ? x.brigadeName : "",
     logoutTime,
     totalWorkTime,
-    isOnline: logoutTime == null,
+    isOnline: x.type !== "day_off" && logoutTime == null,
     deviceInfo: {
       userAgent: String(x.deviceInfo?.userAgent ?? ""),
       platform: String(x.deviceInfo?.platform ?? ""),
@@ -69,7 +69,7 @@ export function loadUserActivityLogs() {
           typeof x.id === "string" &&
           typeof x.ustaId === "string" &&
           typeof x.ustaName === "string" &&
-          typeof x.loginTime === "string" &&
+          (typeof x.loginTime === "string" || (x.type === "day_off" && x.loginTime == null)) &&
           (x.logoutTime === null || typeof x.logoutTime === "string") &&
           x.deviceInfo &&
           typeof x.deviceInfo === "object",

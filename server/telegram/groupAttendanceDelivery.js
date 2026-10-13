@@ -1,3 +1,4 @@
+import { committedDayOffResponse } from './dayOff.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminDb } from '../firebaseAdminAuth.js';
@@ -6,16 +7,17 @@ const configured=env=>!!env.TELEGRAM_BOT_TOKEN && /^-\d{1,20}$/.test(String(env.
 export function createGroupAttendanceNotifier({env=process.env,getBucket,fetchImpl=fetch,now=Date.now}={}) {
   return async(telegramId,_text,{db,requestToken,action})=>{
     if(!configured(env))return {status:'not_configured'};
-    if(!/^\d+$/.test(String(telegramId))||!/^[-a-f0-9]{36}$/.test(requestToken)||!['check_in','check_out'].includes(action))return {status:'denied'};
+    if(!/^\d+$/.test(String(telegramId))||!/^[-a-f0-9]{36}$/.test(requestToken)||!['check_in','check_out','day_off'].includes(action))return {status:'denied'};
     const ref=db.collection('telegramAttendanceUpdates').doc(telegramId+'_mini_'+requestToken);
     const initial=(await ref.get()).data()?.groupDelivery;
     if(!initial)return {status:'not_queued'}; // Never backfill historical attendance.
     if(['sent','uncertain','blocked'].includes(initial.status))return {status:initial.status};
-    const report=await committedPhotoResponse(db,String(telegramId),requestToken,action);
+    const isDayOff=action==='day_off';
+    const report=isDayOff?await committedDayOffResponse(db,String(telegramId),requestToken):await committedPhotoResponse(db,String(telegramId),requestToken,action);
     const target=String(env.TELEGRAM_GROUP_ID).trim(),fingerprint=createHash('sha256').update(target).digest('hex'),attemptId=randomUUID();
     const claim=await db.runTransaction(async tx=>{
       const snapshot=await tx.get(ref),receipt=snapshot.data(),d=receipt?.groupDelivery;
-      if(!d||receipt.action!==action+'_photo'||receipt.storagePath!==report.storagePath)return null;
+      if(!d||receipt.action!==(isDayOff?'day_off':action+'_photo')||(!isDayOff&&receipt.storagePath!==report.storagePath))return null;
       if(d.status==='sending') {
         if(d.attemptedAt?.toMillis?.()<now()-120000)tx.update(ref,{groupDelivery:{...d,status:'uncertain',lastError:'unknown_outcome'}});
         return null;
@@ -34,11 +36,11 @@ export function createGroupAttendanceNotifier({env=process.env,getBucket,fetchIm
     const retryDelay=Math.min(3600000,60000*2**Math.min(claim.attempts-1,6));
     let started=false;
     try {
-      const buffer=await readCommittedPrivatePhoto(report,getBucket);
-      const form=new FormData();form.set('chat_id',target);form.set('caption',report.groupCaption);
-      form.set('photo',new Blob([buffer],{type:report.contentType}),report.contentType==='image/png'?'attendance.png':'attendance.jpg');
+      const buffer=isDayOff?null:await readCommittedPrivatePhoto(report,getBucket);
+      const form=new FormData();form.set('chat_id',target);form.set(isDayOff?'text':'caption',report.groupCaption);
+      if(!isDayOff)form.set('photo',new Blob([buffer],{type:report.contentType}),report.contentType==='image/png'?'attendance.png':'attendance.jpg');
       started=true;
-      const response=await fetchImpl(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendPhoto`,{method:'POST',body:form,signal:AbortSignal.timeout(15000)});
+      const response=await fetchImpl(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${isDayOff?'sendMessage':'sendPhoto'}`,{method:'POST',body:form,signal:AbortSignal.timeout(15000)});
       const body=await response.json();
       if(response.ok&&body.ok===true&&Number.isSafeInteger(body.result?.message_id)&&body.result.message_id>0)return finish('sent',{messageId:body.result.message_id,sentAt:FieldValue.serverTimestamp()});
       if(body.ok===false&&Number.isInteger(body.error_code)) {
