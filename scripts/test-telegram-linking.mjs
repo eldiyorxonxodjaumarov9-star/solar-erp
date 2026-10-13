@@ -1,3 +1,4 @@
+import { createGroupAttendanceNotifier, retryPendingGroupDeliveries, startGroupDeliveryRetries } from '../server/telegram/groupAttendanceDelivery.js';
 import { createPhotoConfirmationNotifier, committedPhotoResponse, attendanceCaption } from '../server/telegram/attendanceResponse.js';
 import { createHmac } from 'node:crypto';
 import { createTelegramCameraRouter } from '../server/routes/telegramCameraApi.js';
@@ -45,6 +46,15 @@ const cameraToken='123:local_test_token';
 const signedInit=(id=123)=>{const fields=new URLSearchParams({auth_date:String(Math.floor(new Date('2026-10-12T03:55:00Z').getTime()/1000)),user:JSON.stringify({id})});const data=[...fields].sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+'='+v).join('\n');fields.set('hash',createHmac('sha256',createHmac('sha256','WebAppData').update(cameraToken).digest()).update(data).digest('hex'));return fields.toString();};
 let failureMode = null, loseNextResponse = false;
 let sentPhotos=[],sendFailure=false;
+const testGroupEnv={TELEGRAM_BOT_TOKEN:cameraToken,TELEGRAM_GROUP_ID:'-100000000999'};
+let groupPhotos=[],groupMode='success',groupNow=Date.now();
+const groupNotifier=createGroupAttendanceNotifier({env:testGroupEnv,now:()=>groupNow,getBucket:async()=>createVpsStorage(mediaDir),fetchImpl:async(url,options)=>{
+ const form=options.body;groupPhotos.push({method:url.split('/').at(-1),chatId:form.get('chat_id'),caption:form.get('caption'),bytes:Buffer.from(await form.get('photo').arrayBuffer())});
+ if(groupMode==='timeout')throw new Error('PRIVATE_FAULT '+testGroupEnv.TELEGRAM_GROUP_ID+' '+testGroupEnv.TELEGRAM_BOT_TOKEN);
+ if(groupMode==='unreadable')return new Response('Bad gateway',{status:502});
+ if(groupMode==='rejected')return new Response(JSON.stringify({ok:false,error_code:429,parameters:{retry_after:1}}),{status:429});
+ return new Response(JSON.stringify({ok:true,result:{message_id:groupPhotos.length}}));
+}});
 const responseNotifier=createPhotoConfirmationNotifier({env:{TELEGRAM_BOT_TOKEN:cameraToken},getBucket:async()=>createVpsStorage(mediaDir),fetchImpl:async(url,options)=>{const form=options.body;sentPhotos.push({method:url.split('/').at(-1),chatId:form.get('chat_id'),caption:form.get('caption'),bytes:Buffer.from(await form.get('photo').arrayBuffer()),mime:form.get('photo').type});return new Response(JSON.stringify({ok:!sendFailure}),{status:sendFailure?500:200});}});
 const tokenMarker = 'emulator-token-' + randomBytes(12).toString('hex');
 const errorMarker = 'PRIVATE_FAULT_DETAILS';
@@ -86,7 +96,7 @@ before(async () => {
       return {uid:'usta:'+workerId,role:'usta',accountId:workerId,workerId,firebase:{sign_in_provider:'custom'}};
     },async()=>{})}));
   const cameraHandler=createTelegramAttendanceHandler({now:()=>new Date('2026-10-12T03:55:00Z'),getBucket:async()=>createVpsStorage(mediaDir)});
-  web.use('/api/telegram/camera',createTelegramCameraRouter({getDb:routeDb,env:{TELEGRAM_BOT_TOKEN:cameraToken},rateLimit:500,now:()=>new Date('2026-10-12T03:55:00Z'),handler:cameraHandler,notify:responseNotifier}));
+  web.use('/api/telegram/camera',createTelegramCameraRouter({getDb:routeDb,env:{TELEGRAM_BOT_TOKEN:cameraToken},rateLimit:500,now:()=>new Date('2026-10-12T03:55:00Z'),handler:cameraHandler,notify:responseNotifier,notifyGroup:groupNotifier}));
   web.use('/api/telegram/attendance',createTelegramAttendanceRouter({getDb:routeDb,env:{TELEGRAM_WEBHOOK_SECRET:secret},
     now:()=>new Date('2026-10-12T03:55:00.000Z'),downloadPhoto:photoDownloader,getBucket:async()=>createVpsStorage(mediaDir)}));
   // Mirror the production rewrite and mount before the Firebase session gate.
@@ -125,7 +135,7 @@ after(async () => {
   await environment?.cleanup(); if (app) await deleteApp(app);
 });
 beforeEach(async () => {
-  sentPhotos=[];sendFailure=false;
+  sentPhotos=[];sendFailure=false;groupPhotos=[];groupMode='success';groupNow=Date.now();
   failureMode = null; loseNextResponse = false;
   fakeFilePath='photos/file_1.jpg';photoBytes=validJpeg;declaredSize=undefined;downloadHook=null;downloadCount=0;
   await environment.clearFirestore();
@@ -804,4 +814,44 @@ test('photo response DENY unlinked, disabled and receipt/private path mismatch',
 });
 test('Telegram photo delivery failure never rolls back attendance or duplicates it',async()=>{
  await pendingArrival();const state=await pendingFor(123);sendFailure=true;const first=await cameraPost(123,state,validJpeg);assert.equal(first.code,200);assert.equal(first.body.notificationSent,false);const before=JSON.stringify((await logOne()).data());assert.equal((await cameraPost(123,state,validJpeg)).body.duplicate,true);assert.equal(JSON.stringify((await logOne()).data()),before);assert.equal(await attendanceCount(),1);assert.equal(sentPhotos.length,1);assert.equal((await db.collection('stage_photos').get()).size,1);
+});
+
+const groupContext=state=>({db,requestToken:state.requestToken,action:state.pendingAction==='check_out_photo'?'check_out':'check_in'});
+async function queuedGroup(){await pendingArrival();const state=await pendingFor(123);const handler=createTelegramAttendanceHandler({now:()=>new Date('2026-10-12T03:55:00Z'),getBucket:async()=>createVpsStorage(mediaDir)});await submitFor(handler);return state;}
+const groupReceipt=async state=>(await db.doc('telegramAttendanceUpdates/123_mini_'+state.requestToken).get()).data();
+test('Keldim group photo exact private bytes/caption once, private response unchanged',async()=>{
+ await pendingArrival();const state=await pendingFor(123);assert.equal(groupPhotos.length,0);assert.equal(await attendanceCount(),0);const first=await cameraPost(123,state,validJpeg);assert.equal(first.body.notificationSent,true);assert.equal(sentPhotos.length,1);assert.equal(groupPhotos.length,1);assert.equal(groupPhotos[0].chatId,testGroupEnv.TELEGRAM_GROUP_ID);assert.equal(groupPhotos[0].method,'sendPhoto');assert.deepEqual(groupPhotos[0].bytes,sentPhotos[0].bytes);assert.equal(groupPhotos[0].caption,'🟢 KELDI\n\n👤 Worker One\n📅 Sana: 12.10.2026\n🕐 Kelgan vaqt: 08:55:00\n\n📸 Kelish rasmi: ✅\n🏢 SolarERP');assert.equal((await groupReceipt(state)).groupDelivery.status,'sent');
+ await Promise.all(Array.from({length:5},()=>cameraPost(123,state,validJpeg)));assert.equal(groupPhotos.length,1);assert.equal(sentPhotos.length,1);assert.equal(await attendanceCount(),1);
+});
+test('camera prompt/preview/cancel or invalid photo never posts to group',async()=>{
+ await pendingArrival();await botText('cancel');assert.equal(groupPhotos.length,0);assert.equal(await attendanceCount(),0);const state=await pendingFor(123);await cameraPost(123,state,Buffer.from('not image'));assert.equal(groupPhotos.length,0);assert.equal((await db.collection('telegramAttendanceUpdates').get()).docs.some(d=>d.data().groupDelivery),false);
+});
+test('Ketdim group photo uses departure bytes and stored 9h17 Tashkent duration',async()=>{
+ await linkBot();let instant=new Date('2026-10-12T03:57:12Z');const handler=createTelegramAttendanceHandler({now:()=>instant,getBucket:async()=>createVpsStorage(mediaDir)});await handler(db,botInput('🟢 Keldim'));const arrival=await pendingFor(123);await submitFor(handler);await groupNotifier('123','',groupContext(arrival));instant=new Date('2026-10-12T13:14:12Z');await handler(db,botInput('🔴 Ketdim'));const departure=await pendingFor(123);assert.equal(groupPhotos.length,1);await submitFor(handler);await groupNotifier('123','',groupContext(departure));assert.equal(groupPhotos.length,2);const record=(await logOne()).data();const photo=(await db.doc('stage_photos/'+record.telegramDeparturePhoto).get()).data();const [bytes]=await createVpsStorage(mediaDir).file(photo.storagePath).download();assert.deepEqual(groupPhotos[1].bytes,bytes);for(const text of ['🔴 KETDI','08:57:12','18:14:12','9 soat 17 daqiqa','Ketish rasmi: ✅','🏢 SolarERP'])assert.ok(groupPhotos[1].caption.includes(text),text);await groupNotifier('123','',groupContext(departure));assert.equal(groupPhotos.length,2);
+});
+test('group explicit rejection keeps attendance/private success and retry produces one accepted post',async()=>{
+ await pendingArrival();const state=await pendingFor(123);groupMode='rejected';const first=await cameraPost(123,state,validJpeg);assert.equal(first.code,200);assert.equal(first.body.notificationSent,true);assert.equal((await groupReceipt(state)).groupDelivery.status,'retryable');const before=JSON.stringify((await logOne()).data());await cameraPost(123,state,validJpeg);assert.equal(groupPhotos.length,1);groupNow+=60001;groupMode='success';await Promise.all(Array.from({length:5},()=>groupNotifier('123','',groupContext(state))));assert.equal(groupPhotos.length,2);assert.equal((await groupReceipt(state)).groupDelivery.status,'sent');await groupNotifier('123','',groupContext(state));assert.equal(groupPhotos.length,2);assert.equal(sentPhotos.length,1);assert.equal(JSON.stringify((await logOne()).data()),before);
+});
+for(const mode of ['timeout','unreadable'])test('group ambiguous '+mode+' never automatically re-posts',async()=>{
+ await pendingArrival();const state=await pendingFor(123);groupMode=mode;await captureServerLogs(async()=>assert.equal((await cameraPost(123,state,validJpeg)).code,200));assert.equal((await groupReceipt(state)).groupDelivery.status,'uncertain');assert.equal(await attendanceCount(),1);groupMode='success';groupNow+=3600000;await cameraPost(123,state,validJpeg);await retryPendingGroupDeliveries({env:testGroupEnv,getDb:async()=>db,notify:groupNotifier});assert.equal(groupPhotos.length,1);
+});
+test('group parallel five dispatchers claim one delivery',async()=>{const state=await queuedGroup();await Promise.all(Array.from({length:5},()=>groupNotifier('123','',groupContext(state))));assert.equal(groupPhotos.length,1);assert.equal((await groupReceipt(state)).groupDelivery.status,'sent');});
+test('group success with lost DB acknowledgement is never automatically resent',async()=>{
+ const state=await queuedGroup();let transactions=0;const uncertainDb={collection:name=>db.collection(name),runTransaction:cb=>{if(++transactions===3)throw new Error('Outcome write lost');return db.runTransaction(cb);}};await groupNotifier('123','',{...groupContext(state),db:uncertainDb});assert.equal(groupPhotos.length,1);assert.equal((await groupReceipt(state)).groupDelivery.status,'sending');groupNow+=180000;await retryPendingGroupDeliveries({env:testGroupEnv,getDb:async()=>db,notify:groupNotifier});assert.equal(groupPhotos.length,1);assert.equal((await groupReceipt(state)).groupDelivery.status,'uncertain');
+});
+test('background retry drains only new pending receipts, skips historical and never reposts sent',async()=>{
+ const state=await queuedGroup();await db.doc('telegramAttendanceUpdates/historical').set({workerId:'w1',telegramUserId:'123',action:'check_in_photo',date:'2026-10-12'});await retryPendingGroupDeliveries({env:testGroupEnv,getDb:async()=>db,notify:groupNotifier});await retryPendingGroupDeliveries({env:testGroupEnv,getDb:async()=>db,notify:groupNotifier});assert.equal(groupPhotos.length,1);assert.equal((await groupReceipt(state)).groupDelivery.status,'sent');assert.equal((await db.doc('telegramAttendanceUpdates/historical').get()).data().groupDelivery,undefined);
+});
+test('group DENY disabled/foreign worker before send and claim',async()=>{const state=await queuedGroup();await db.doc('workers/w1').update({disabled:true});await assert.rejects(groupNotifier('123','',groupContext(state)));await groupNotifier('456','',groupContext(state));assert.equal(groupPhotos.length,0);assert.equal((await groupReceipt(state)).groupDelivery.status,'pending');});
+test('group missing config stays pending; changed target on retry blocked',async()=>{
+ const state=await queuedGroup();const missing=createGroupAttendanceNotifier({env:{TELEGRAM_BOT_TOKEN:cameraToken}});await missing('123','',groupContext(state));assert.equal((await groupReceipt(state)).groupDelivery.status,'pending');groupMode='rejected';await groupNotifier('123','',groupContext(state));groupNow+=60001;const changed=createGroupAttendanceNotifier({env:{...testGroupEnv,TELEGRAM_GROUP_ID:'-100000000998'},now:()=>groupNow});await changed('123','',groupContext(state));assert.equal((await groupReceipt(state)).groupDelivery.status,'blocked');assert.equal(groupPhotos.length,1);
+});
+test('private send failure does not prevent committed group post',async()=>{await pendingArrival();const state=await pendingFor(123);sendFailure=true;const first=await cameraPost(123,state,validJpeg);assert.equal(first.code,200);assert.equal(first.body.notificationSent,false);assert.equal(groupPhotos.length,1);assert.equal((await groupReceipt(state)).groupDelivery.status,'sent');assert.equal(await attendanceCount(),1);});
+
+test('dedicated group runner drains pending delivery while legacy background tasks stay disabled',async()=>{
+ const state=await queuedGroup();const stop=startGroupDeliveryRetries({env:{...testGroupEnv,SOLARERP_DISABLE_BACKGROUND_TASKS:'true'},getDb:async()=>db,notify:groupNotifier});try{for(let i=0;i<50;i++){if((await groupReceipt(state)).groupDelivery.status==='sent')break;await new Promise(r=>setTimeout(r,50));}assert.equal((await groupReceipt(state)).groupDelivery.status,'sent');assert.equal(groupPhotos.length,1);}finally{stop();}
+});
+
+test('group pre-send storage failure retries safely without changing attendance',async()=>{
+ const state=await queuedGroup();const before=JSON.stringify((await logOne()).data());const failed=createGroupAttendanceNotifier({env:testGroupEnv,now:()=>groupNow,getBucket:async()=>{throw new Error('Private storage unavailable');}});await failed('123','',groupContext(state));assert.equal((await groupReceipt(state)).groupDelivery.status,'retryable');assert.equal(groupPhotos.length,0);groupNow+=60001;await groupNotifier('123','',groupContext(state));assert.equal(groupPhotos.length,1);assert.equal((await groupReceipt(state)).groupDelivery.status,'sent');assert.equal(JSON.stringify((await logOne()).data()),before);
 });

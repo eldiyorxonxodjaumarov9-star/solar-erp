@@ -100,6 +100,7 @@ export function createTelegramAttendanceHandler({ now = () => new Date(), downlo
         requestId: ['photo_wait','check_in','check_out'].includes(action) ? update.update_id : state.requestId ?? null,
         expiresAt: ['photo_wait','check_in','check_out'].includes(action) ? now().getTime() + 15*60*1000 : 0 });
       tx.create(receiptRef, { workerId, telegramUserId: telegramId, updateId: update.update_id, action: action === 'photo' && pendingCheckIn ? 'check_in_photo' : action === 'photo' && pendingCheckOut ? 'check_out_photo' : action, date, createdAt: FieldValue.serverTimestamp(),
+        ...(camera && action === 'photo' && (pendingCheckIn || pendingCheckOut) ? {groupDelivery:{status:'pending',attempts:0}} : {}),
         ...(action === 'photo' ? { fileId: message.photo.at(-1).file_id, storagePath: attach.saved.storagePath } : {}) });
       if (['check_in','check_out'].includes(action)) return cameraPrompt(action, requestToken, miniAppUrl);
       return answer(action === 'photo' && pendingCheckIn ? '✅ Kelish qayd etildi' : action === 'photo' && pendingCheckOut ? '✅ Ketish qayd etildi' : action === 'photo_wait' ? '📷 Iltimos, ish joyidan rasm yuboring.' : '📷 Rasm saqlandi.');

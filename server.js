@@ -1,3 +1,4 @@
+import { startGroupDeliveryRetries } from './server/telegram/groupAttendanceDelivery.js';
 import { createTelegramCameraRouter } from './server/routes/telegramCameraApi.js';
 import { createTelegramAttendanceRouter } from './server/routes/telegramAttendanceApi.js';
 import { createTelegramReviewRouter } from './server/routes/telegramReviewApi.js';
@@ -1514,10 +1515,13 @@ process.on("unhandledRejection", (reason) => {
 });
 
 let server = null;
+let stopGroupDeliveryRetries = () => {};
 
 export function startServer({ port = PORT, host = process.env.BIND_HOST || "0.0.0.0" } = {}) {
   if (server) return server;
   server = app.listen(Number(port) || PORT, host, () => {
+    // Dedicated durable group delivery is independent of the disabled legacy bot jobs.
+    stopGroupDeliveryRetries = startGroupDeliveryRetries();
     const p = Number(port) || PORT;
     console.log(`[server] PORT=${p}`);
     console.log(`Server running on port ${p}`);
@@ -1556,6 +1560,7 @@ export function startServer({ port = PORT, host = process.env.BIND_HOST || "0.0.
 
 export function stopServer() {
   try {
+    stopGroupDeliveryRetries();
     stopBot();
     stopTelegramInboundPoller();
     if (!server) return;

@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import { attendanceCaption,workDuration } from '../server/telegram/attendanceResponse.js';
+import test from 'node:test';import assert from 'node:assert/strict';import { attendanceCaption,workDuration,groupAttendanceCaption } from '../server/telegram/attendanceResponse.js';
 const record={ustaName:'Worker Example',workAttendance:true,loginTime:'2026-10-12T03:57:12Z',logoutTime:'2026-10-12T13:14:12Z'};
 test('arrival caption stored date/name/second precision, no checkout or duration',()=>{const s=attendanceCaption({record,date:'2026-10-12',arrival:true,departure:true,action:'check_in'});for(const t of ['KELISH QAYD ETILDI','Worker Example','12.10.2026','08:57:12','Ketgan vaqt: —','Ish vaqti: —'])assert.ok(s.includes(t));assert.ok(!s.includes('Ketish rasmi'));});
 test('departure stored Tashkent time and duration',()=>{const s=attendanceCaption({record,date:'2026-10-12',arrival:true,departure:true,action:'check_out'});for(const t of ['KETISH QAYD ETILDI','08:57:12','18:14:12','9 soat 17 daqiqa','Ketish rasmi: ✅'])assert.ok(s.includes(t));});
@@ -9,3 +9,5 @@ test('Firestore timestamps supported and midnight Tashkent is 00',()=>{const s=a
 test('worker name is plain text, bounded, and cannot inject caption rows',()=>{const s=attendanceCaption({workerName:'A\nB'+('x'.repeat(200)),date:'2026-10-12'});assert.ok(s.includes('👤 A B'));assert.ok(!s.includes('👤 A\nB'));assert.ok(s.length<400);});
 
 test('login-only app session is not displayed as work attendance',()=>{const s=attendanceCaption({record:{...record,workAttendance:false},date:'2026-10-12'});assert.ok(s.includes('Kelgan vaqt: —'));assert.ok(s.includes('Ketgan vaqt: —'));assert.ok(s.includes('Ish vaqti: —'));});
+
+test('group captions use stored date/seconds/duration and no private identifiers',()=>{for(const action of ['check_in','check_out']){const caption=groupAttendanceCaption({record,date:'2026-10-12',action});assert.ok(caption.includes('Worker Example'));assert.ok(caption.includes('12.10.2026'));assert.ok(caption.includes('08:57:12'));assert.ok(caption.includes('🏢 SolarERP'));if(action==='check_out'){assert.ok(caption.includes('18:14:12'));assert.ok(caption.includes('9 soat 17 daqiqa'));}assert.ok(!caption.includes('private/'));}});
