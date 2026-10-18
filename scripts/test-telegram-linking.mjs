@@ -170,10 +170,11 @@ async function post(payload, provided = secret, path = '/api/telegram/link', raw
   return { code: response.status, body: await response.json() };
 }
 const success = 'Hisobingiz bog‘landi.', denial = 'Bog‘lash amalga oshmadi. Administratorga murojaat qiling.';
+const linkedKeyboard = [['🟢 Keldim', '🔴 Ketdim'], ['🏠 Bugun dam olaman', '📍 Bugungi holatim']];
 function generic(result, id, text) {
   assert.equal(result.code, 200);
   assert.deepEqual(result.body, { method: 'sendMessage', chat_id: id, text,
-    ...(text === success ? { reply_markup: { remove_keyboard: true } } : {}) });
+    ...(text === success ? { reply_markup: { keyboard: linkedKeyboard, resize_keyboard: true } } : {}) });
 }
 test('workers phone -> canonical worker identity and exact Firebase UID', async () => {
   const { identityBinding, ...resolved } = await resolveIdentity('90 123-45-67');
@@ -253,7 +254,8 @@ for (const size of [2, 5]) {
 test('/start returns contact keyboard', async () => {
   const payload = input(); delete payload.message.contact; payload.message.text = '/start';
   const result = await post(payload); assert.equal(result.code, 200);
-  assert.equal(result.body.reply_markup.keyboard[0][0].request_contact, true); await pairs(0);
+  assert.equal(result.body.text, 'Assalomu alaykum! SolarERP botiga xush kelibsiz. Hisobingizni ulash uchun telefon raqamingizni yuboring.');
+  assert.deepEqual(result.body.reply_markup.keyboard, [[{ text: '📱 Telefon raqamni yuborish', request_contact: true }]]); await pairs(0);
 });
 for (const header of [null, 'bad', 'x'.repeat(secret.length)]) {
   test(`missing/invalid secret ${header === null ? 'missing' : header.length} -> generic 403`, async () => {
@@ -577,7 +579,8 @@ test('bot active linked /start returns four-action reply keyboard',async()=>{
   assert.deepEqual(result.body.reply_markup.keyboard,[['🟢 Keldim','🔴 Ketdim'],['🏠 Bugun dam olaman','📍 Bugungi holatim']]);
 });
 test('bot unlinked start/contact retains secure linking flow',async()=>{
-  assert.equal((await botText('/start')).body.reply_markup.keyboard[0][0].request_contact,true);
+  const start=await botText('/start');assert.equal(start.body.text,'Assalomu alaykum! SolarERP botiga xush kelibsiz. Hisobingizni ulash uchun telefon raqamingizni yuboring.');
+  assert.deepEqual(start.body.reply_markup.keyboard,[[{text:'📱 Telefon raqamni yuborish',request_contact:true}]]);
   generic(await bot({...input(),update_id:++botSequence}),123,success);await pairs(1);
 });
 test('bot check-in writes existing admin attendance schema with server timestamp',async()=>{
