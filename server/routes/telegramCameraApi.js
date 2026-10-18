@@ -17,9 +17,9 @@ export function createTelegramCameraRouter({ getDb = getServerAdminDb, env = pro
   router.get('/', (_req,res) => {
     res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' blob: data:; media-src blob:; connect-src 'self'; frame-ancestors https://web.telegram.org https://*.telegram.org; base-uri 'none'; form-action 'none'");
     res.setHeader('Permissions-Policy','camera=(self), microphone=(), geolocation=()');
-    res.sendFile(webRoot + 'index.html');
+    res.sendFile('index.html', { root: webRoot });
   });
-  for (const file of ['app.js','style.css']) router.get('/'+file, (_req,res) => res.sendFile(webRoot + file));
+  for (const file of ['app.js','style.css']) router.get('/'+file, (_req,res) => res.sendFile(file, { root: webRoot }));
   router.use((req,res,next) => {
     const key = req.ip || 'unknown', window = Math.floor(now().getTime()/60000);
     if(rates.size>1000)rates.clear();const entry=rates.get(key);const count=entry?.window===window?entry.count+1:1;rates.set(key,{window,count});

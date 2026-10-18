@@ -3,14 +3,18 @@ import { authorizeExistingTelegramMapping } from './workerAuthorization.js';
 import { resolveWorkerIdentity } from './workerIdentity.js';
 
 const denied = () => ({ status: 'denied', text: 'Bog‘lash amalga oshmadi. Administratorga murojaat qiling.' });
+const attendanceKeyboard = {
+  keyboard: [['🟢 Keldim', '🔴 Ketdim'], ['🏠 Bugun dam olaman', '📍 Bugungi holatim']],
+  resize_keyboard: true,
+};
 export async function handleTelegramLink(db, update) {
   const message = update?.message;
   const id = message?.from?.id;
   if (!Number.isSafeInteger(id) || id <= 0 || message?.from?.is_bot ||
       message?.chat?.type !== 'private' || message.chat.id !== id) return denied();
   if (/^\/start(?:\s|$)/.test(message.text || '')) return {
-    status: 'contact_requested', text: 'Telefon raqamingizni yuboring.', reply_markup: {
-      keyboard: [[{ text: 'Telefon raqamni yuborish', request_contact: true }]],
+    status: 'contact_requested', text: 'Assalomu alaykum! SolarERP botiga xush kelibsiz. Hisobingizni ulash uchun telefon raqamingizni yuboring.', reply_markup: {
+      keyboard: [[{ text: '📱 Telefon raqamni yuborish', request_contact: true }]],
       resize_keyboard: true, one_time_keyboard: true,
     },
   };
@@ -40,6 +44,6 @@ export async function handleTelegramLink(db, update) {
     const mapping = { telegramUserId, telegramChatId: String(message.chat.id),
       workerId, firebaseUid, linkedAt: new Date().toISOString(), status: 'linked', identityBinding: resolved.identityBinding };
     tx.create(forward, mapping); tx.create(reverse, mapping);
-    return { status: 'linked', text: 'Hisobingiz bog‘landi.', reply_markup: { remove_keyboard: true } };
+    return { status: 'linked', text: 'Hisobingiz bog‘landi.', reply_markup: attendanceKeyboard };
   });
 }
