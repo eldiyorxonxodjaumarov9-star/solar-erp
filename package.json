@@ -53,7 +53,7 @@
     "test:release-final": "node --experimental-vm-modules scripts/test-stage6-release.mjs && node --experimental-vm-modules scripts/test-stage6-exports.mjs",
     "release:gate": "node scripts/release-gate.mjs",
     "test:telegram-camera": "node --test scripts/test-telegram-camera.mjs scripts/test-telegram-camera-ui.mjs",
-    "test:telegram-admin": "node --test scripts/test-telegram-admin.mjs"
+    "test:telegram-admin": "node --test scripts/test-telegram-admin.mjs scripts/test-telegram-admin-webapp.mjs"
   },
   "dependencies": {
     "@capacitor/camera": "^6.1.3",

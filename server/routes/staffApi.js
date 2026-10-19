@@ -3,6 +3,7 @@ import { hashPassword } from '../passwordHash.js';
 import { getServerAdminDb } from '../firebaseAdminAuth.js';
 import { requireFirebaseSession } from '../authMiddleware.js';
 import { prepareWorkerSalaryRate } from '../../src/workers/workerSalaryRate.js';
+import { createWorkerProfile } from '../workerService.js';
 
 import { revokeAccountSessions, newSessionVersion } from '../accountSecurity.js';
 const FIELDS = ['fullName','name','login','loginLower','phone','position','brigadeId','brigadeName','experienceYears','rating','salary','workingDays','dailySalary','salaryEffectiveDate','salaryHistory','telegramUserId','telegramUsername','status','disabled','points','createdAt','updatedAt'];
@@ -52,6 +53,10 @@ export function createStaffRouter({ getDb = getServerAdminDb, authorize = requir
       const db=await getDb(), body=req.body || {};
       if (req.params.id && (req.params.id.includes('/') || req.params.id.length > 120)) return res.status(400).json({ok:false});
       if (body.password !== undefined && (typeof body.password !== 'string' || body.password.length > 1024)) return res.status(400).json({ok:false});
+      if (name==='workers' && !req.params.id) {
+        const created=await createWorkerProfile(db,body);
+        return res.json({ok:true,item:publicStaffProfile(created.id,created)});
+      }
       let ref=req.params.id ? db.collection(name).doc(req.params.id) : db.collection(name).doc();
       let before=await ref.get();
       if(!before.exists && name==='workers' && req.params.id) {
