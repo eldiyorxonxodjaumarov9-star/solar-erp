@@ -2,8 +2,9 @@ import { Router, json } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { getServerAdminDb } from '../firebaseAdminAuth.js';
 import { handleTelegramLink } from '../telegram/linking.js';
+import { handleTelegramAdmin } from '../telegram/adminPanel.js';
 
-export function createTelegramLinkRouter({ getDb = getServerAdminDb, env = process.env, handleUpdate = handleTelegramLink } = {}) {
+export function createTelegramLinkRouter({ getDb = getServerAdminDb, env = process.env, handleUpdate = handleTelegramLink, handleAdmin = handleTelegramAdmin } = {}) {
   const router = Router();
   router.post('/', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -21,7 +22,8 @@ export function createTelegramLinkRouter({ getDb = getServerAdminDb, env = proce
     if (!Number.isSafeInteger(chatId) || chatId <= 0 || message?.chat?.type !== 'private' ||
         chatId !== message?.from?.id || message?.from?.is_bot) return res.json({ ok: true });
     try {
-      const result = await handleUpdate(await getDb(), req.body);
+      const db = await getDb();
+      const result = await handleAdmin(db, req.body, { env }) || await handleUpdate(db, req.body);
       return res.json({ method: 'sendMessage', chat_id: chatId, text: result.text,
         ...(result.reply_markup ? { reply_markup: result.reply_markup } : {}) });
     } catch { return res.status(503).json({ error: 'Linking unavailable' }); }
