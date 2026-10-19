@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <title>SolarERP admin</title>
+    <link rel="stylesheet" href="/api/telegram/admin/assets/style.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">SolarERP</p>
+          <h1>Admin panel</h1>
+        </div>
+        <button class="icon-button" id="refresh" type="button" aria-label="Ro‘yxatni yangilash">↻</button>
+      </header>
+
+      <section class="summary-card" aria-live="polite">
+        <div><span class="summary-number" id="employee-count">—</span><span class="summary-label">xodim</span></div>
+        <p id="notice" role="status">Ma’lumotlar yuklanmoqda…</p>
+      </section>
+
+      <section class="section-card">
+        <div class="section-heading">
+          <div><p class="eyebrow">Jamoa</p><h2>Xodimlar</h2></div>
+          <button class="primary-button compact" id="show-form" type="button">+ Yangi xodim</button>
+        </div>
+        <ul class="employee-list" id="employees" aria-live="polite"></ul>
+      </section>
+
+      <section class="section-card form-card" id="form-card" hidden>
+        <div class="section-heading"><div><p class="eyebrow">Yangi profil</p><h2>Xodim qo‘shish</h2></div></div>
+        <form id="worker-form" autocomplete="off">
+          <label>Ism familiya<input name="fullName" maxlength="120" required autocomplete="name"></label>
+          <label>Telefon<input name="phone" type="tel" inputmode="tel" maxlength="24" placeholder="+998 90 123 45 67" required autocomplete="tel"></label>
+          <label>Lavozim<input name="position" maxlength="80" required autocomplete="organization-title"></label>
+          <div class="field-row">
+            <label>Login<input name="login" maxlength="80" required autocomplete="username"></label>
+            <label>Parol<input name="password" type="password" maxlength="1024" required autocomplete="new-password"></label>
+          </div>
+          <div class="field-row">
+            <label>Oylik ish haqi<input name="salary" type="number" min="0" step="any" required inputmode="decimal"></label>
+            <label>Oy ish kunlari<input name="workingDays" type="number" min="1" step="1" value="26" required inputmode="numeric"></label>
+          </div>
+          <label>Stavka amal qilish sanasi<input name="salaryEffectiveDate" type="date" required></label>
+          <details><summary>Ixtiyoriy ma’lumotlar</summary>
+            <div class="optional-fields">
+              <label>Tajriba yillari<input name="experienceYears" type="number" min="0" step="1" inputmode="numeric"></label>
+              <label>Baho (0–5)<input name="rating" type="number" min="0" max="5" step="0.1" inputmode="decimal"></label>
+            </div>
+          </details>
+          <p class="form-error" id="form-error" role="alert" hidden></p>
+          <div class="form-actions">
+            <button class="secondary-button" id="cancel-form" type="button">Bekor qilish</button>
+            <button class="primary-button" id="save-worker" type="submit">Xodimni saqlash</button>
+          </div>
+        </form>
+      </section>
+      <footer>Ulanish holati xodimning o‘z Telegram hisobidan yuborgan kontakti orqali yangilanadi.</footer>
+    </main>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="/api/telegram/admin/assets/app.js" defer></script>
+  </body>
+</html>
